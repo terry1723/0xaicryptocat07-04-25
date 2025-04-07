@@ -83,9 +83,6 @@ DEEPSEEK_API_KEY = get_api_key("DEEPSEEK_API_KEY", "sk-6ae04d6789f94178b4053d2c4
 COINMARKETCAP_API_KEY = get_api_key("COINMARKETCAP_API_KEY", "b54bcf4d-1bca-4e8e-9a24-22ff2c3d462c")
 OPENAI_API_KEY = get_api_key("OPENAI_API_KEY", "")
 
-# 設置 Bitget MCP 服務器
-BITGET_MCP_SERVER = "http://localhost:3000"
-
 # 添加自定義 CSS 來優化界面
 st.markdown("""
 <style>
