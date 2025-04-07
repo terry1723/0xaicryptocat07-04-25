@@ -68,8 +68,18 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formatdate
 
-# 導入WhatsApp提醒模塊
-from whatsapp_alert import send_whatsapp_alert, format_crypto_alert, test_whatsapp_alert, check_whatsapp_connection
+# 嘗試導入WhatsApp提醒模塊，如果失敗則設置為None
+try:
+    from whatsapp_alert import send_whatsapp_alert, format_crypto_alert, test_whatsapp_alert, check_whatsapp_connection
+    WHATSAPP_AVAILABLE = True
+except ImportError:
+    print("WhatsApp模塊未安裝或無法導入，WhatsApp提醒功能將不可用")
+    WHATSAPP_AVAILABLE = False
+    # 創建空函數作為替代，防止調用出錯
+    def send_whatsapp_alert(*args, **kwargs): return False
+    def format_crypto_alert(*args, **kwargs): return ""
+    def test_whatsapp_alert(*args, **kwargs): return False
+    def check_whatsapp_connection(*args, **kwargs): return {"status": "error", "message": "WhatsApp模塊未安裝"}
 
 # 加載環境變數
 load_dotenv()
@@ -2826,7 +2836,10 @@ with tabs[3]:
     enable_alerts = st.checkbox("啟用交易提醒", value=True, key="enable_alerts")
     
     # 提醒方式
-    alert_method = st.radio("提醒方式", ["電子郵件", "WhatsApp", "網頁通知"], index=0, key="alert_method")
+    alert_options = ["電子郵件", "網頁通知"]
+    if WHATSAPP_AVAILABLE:
+        alert_options.insert(1, "WhatsApp")
+    alert_method = st.radio("提醒方式", alert_options, index=0, key="alert_method")
     
     # 提醒觸發條件
     st.slider("最低策略評分觸發閾值", min_value=1, max_value=10, value=8, key="score_threshold")
@@ -2855,38 +2868,41 @@ with tabs[3]:
     
     # WhatsApp設置
     elif alert_method == "WhatsApp":
-        # WhatsApp手機號碼設置
-        st.text_input("WhatsApp手機號碼 (包含國家代碼，如852XXXXXXXX)", value="", key="whatsapp_phone")
-        
-        # 顯示WhatsApp MCP連接狀態
-        whatsapp_status = check_whatsapp_connection()
-        if whatsapp_status.get("status") == "connected":
-            st.success("WhatsApp連接狀態: 已連接")
+        if not WHATSAPP_AVAILABLE:
+            st.error("WhatsApp功能未啟用。請先安裝Smithery MCP依賴並重新部署應用。")
         else:
-            st.warning(f"WhatsApp連接狀態: 未連接 ({whatsapp_status.get('message', '未知錯誤')})")
-            st.info("請確保Zeabur環境變數中設置了WHATSAPP_MCP_KEY和WHATSAPP_SESSION_NAME")
-        
-        # 保存和測試按鈕
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("保存提醒設置", key="save_whatsapp_settings"):
-                st.success("WhatsApp設置已保存")
-        with col2:
-            if st.button("發送測試WhatsApp", key="send_test_whatsapp"):
-                try:
-                    # 獲取手機號碼
-                    phone_number = st.session_state.get("whatsapp_phone", "")
-                    if not phone_number:
-                        st.error("請先輸入有效的WhatsApp手機號碼")
-                    else:
-                        # 發送測試WhatsApp
-                        test_result = test_whatsapp_alert(phone_number)
-                        if test_result:
-                            st.success(f"測試WhatsApp發送成功！請檢查 {phone_number} 的手機。")
+            # WhatsApp手機號碼設置
+            st.text_input("WhatsApp手機號碼 (包含國家代碼，如852XXXXXXXX)", value="", key="whatsapp_phone")
+            
+            # 顯示WhatsApp MCP連接狀態
+            whatsapp_status = check_whatsapp_connection()
+            if whatsapp_status.get("status") == "connected":
+                st.success("WhatsApp連接狀態: 已連接")
+            else:
+                st.warning(f"WhatsApp連接狀態: 未連接 ({whatsapp_status.get('message', '未知錯誤')})")
+                st.info("請確保Zeabur環境變數中設置了WHATSAPP_MCP_KEY和WHATSAPP_SESSION_NAME")
+            
+            # 保存和測試按鈕
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("保存提醒設置", key="save_whatsapp_settings"):
+                    st.success("WhatsApp設置已保存")
+            with col2:
+                if st.button("發送測試WhatsApp", key="send_test_whatsapp"):
+                    try:
+                        # 獲取手機號碼
+                        phone_number = st.session_state.get("whatsapp_phone", "")
+                        if not phone_number:
+                            st.error("請先輸入有效的WhatsApp手機號碼")
                         else:
-                            st.error("WhatsApp發送失敗。請確認手機號碼和環境變數設置是否正確。")
-                except Exception as e:
-                    st.error(f"發送測試WhatsApp時出錯: {str(e)}")
+                            # 發送測試WhatsApp
+                            test_result = test_whatsapp_alert(phone_number)
+                            if test_result:
+                                st.success(f"測試WhatsApp發送成功！請檢查 {phone_number} 的手機。")
+                            else:
+                                st.error("WhatsApp發送失敗。請確認手機號碼和環境變數設置是否正確。")
+                    except Exception as e:
+                        st.error(f"發送測試WhatsApp時出錯: {str(e)}")
                     
     # 網頁通知設置
     elif alert_method == "網頁通知":
@@ -2910,8 +2926,9 @@ with tabs[3]:
     # CoinMarketCap API 設置
     cmc_key = st.text_input("CoinMarketCap API 密鑰", type="password", value="*" * 10 if COINMARKETCAP_API_KEY else "", key="cmc_api_key")
     
-    # WhatsApp MCP API 設置
-    whatsapp_key = st.text_input("WhatsApp MCP API 密鑰", type="password", value="*" * 10 if os.getenv("WHATSAPP_MCP_KEY") else "", key="whatsapp_mcp_key")
+    # WhatsApp MCP API 設置 (僅在WhatsApp功能可用時顯示)
+    if WHATSAPP_AVAILABLE:
+        whatsapp_key = st.text_input("WhatsApp MCP API 密鑰", type="password", value="*" * 10 if os.getenv("WHATSAPP_MCP_KEY") else "", key="whatsapp_mcp_key")
     
     # 保存按鈕
     st.button("保存設置", key="save_api_settings")
@@ -3161,6 +3178,11 @@ def check_alert_conditions(strategy_text, symbol, timeframe, confidence):
                 alerts_sent = True
         
         elif alert_method == "WhatsApp":
+            # 檢查WhatsApp功能是否可用
+            if not WHATSAPP_AVAILABLE:
+                st.warning("WhatsApp提醒功能已觸發，但未安裝WhatsApp模塊。請安裝Smithery MCP依賴。")
+                return False
+                
             # 獲取WhatsApp設置
             phone_number = st.session_state.get("whatsapp_phone", "")
             
@@ -3185,7 +3207,7 @@ def check_alert_conditions(strategy_text, symbol, timeframe, confidence):
             whatsapp_sent = send_whatsapp_alert(phone_number, whatsapp_message)
             if whatsapp_sent:
                 alerts_sent = True
-                
+        
         elif alert_method == "網頁通知":
             # 顯示網頁通知（暫不支持）
             st.warning(f"檢測到高評分策略：{strategy_name} [{score}分]，但網頁通知功能尚未實現。")
