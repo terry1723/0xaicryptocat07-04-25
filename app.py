@@ -2856,9 +2856,7 @@ with tabs[3]:
     enable_alerts = st.checkbox("啟用交易提醒", value=True, key="enable_alerts")
     
     # 提醒方式
-    alert_options = ["電子郵件", "網頁通知"]
-    if WHATSAPP_AVAILABLE:
-        alert_options.insert(1, "WhatsApp")
+    alert_options = ["電子郵件", "WhatsApp", "網頁通知"]
     alert_method = st.radio("提醒方式", alert_options, index=0, key="alert_method")
     
     # 提醒觸發條件
