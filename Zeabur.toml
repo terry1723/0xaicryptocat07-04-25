@@ -1,0 +1,2 @@
+name=0xaicryptocat
+start=streamlit run app.py

@@ -11,6 +11,16 @@
 """
 
 import streamlit as st
+
+# 設置頁面配置 - 這必須是第一個st命令
+st.set_page_config(
+    page_title="0xAI CryptoCat 分析",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# 導入其他必要庫
 import pandas as pd
 import numpy as np
 import ccxt
@@ -25,6 +35,26 @@ from dotenv import load_dotenv
 
 # 加載環境變數
 load_dotenv()
+
+# 處理 orjson 相關問題
+import plotly.io._json
+# 如果 orjson 存在，修復 OPT_NON_STR_KEYS 問題
+try:
+    import orjson
+    if not hasattr(orjson, 'OPT_NON_STR_KEYS'):
+        orjson.OPT_NON_STR_KEYS = 2  # 定義缺失的常量
+except ImportError:
+    pass
+except AttributeError:
+    # 修改 _json_to_plotly 方法，避免使用 OPT_NON_STR_KEYS
+    orig_to_json_plotly = plotly.io._json.to_json_plotly
+    def patched_to_json_plotly(fig_dict, *args, **kwargs):
+        try:
+            return orig_to_json_plotly(fig_dict, *args, **kwargs)
+        except AttributeError:
+            # 使用 json 而不是 orjson 進行序列化
+            return json.dumps(fig_dict)
+    plotly.io._json.to_json_plotly = patched_to_json_plotly
 
 # 安全地從 secrets 或環境變量獲取 API 密鑰
 def get_api_key(key_name, default_value=None):
@@ -55,14 +85,6 @@ OPENAI_API_KEY = get_api_key("OPENAI_API_KEY", "")
 
 # 設置 Bitget MCP 服務器
 BITGET_MCP_SERVER = "http://localhost:3000"
-
-# 設置頁面配置
-st.set_page_config(
-    page_title="0xAI CryptoCat 分析",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
 
 # 添加自定義 CSS 來優化界面
 st.markdown("""
@@ -212,28 +234,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# 處理 orjson 相關問題
-import plotly.io._json
-# 如果 orjson 存在，修復 OPT_NON_STR_KEYS 問題
-try:
-    import orjson
-    if not hasattr(orjson, 'OPT_NON_STR_KEYS'):
-        orjson.OPT_NON_STR_KEYS = 2  # 定義缺失的常量
-except ImportError:
-    pass
-except AttributeError:
-    # 修改 _json_to_plotly 方法，避免使用 OPT_NON_STR_KEYS
-    orig_to_json_plotly = plotly.io._json.to_json_plotly
-    def patched_to_json_plotly(fig_dict, *args, **kwargs):
-        try:
-            return orig_to_json_plotly(fig_dict, *args, **kwargs)
-        except AttributeError:
-            # 使用 json 而不是 orjson 進行序列化
-            return json.dumps(fig_dict)
-    plotly.io._json.to_json_plotly = patched_to_json_plotly
-
-# 設置 Bitget MCP 服務器
 
 # DexScreener API函數，獲取加密貨幣數據
 def get_dexscreener_data(symbol, timeframe, limit=100):
