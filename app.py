@@ -44,6 +44,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# 初始化會話狀態變數，避免KeyError
+if "analyzed" not in st.session_state:
+    st.session_state.analyzed = False
+if "price_data" not in st.session_state:
+    st.session_state.price_data = {}
+
 # 導入其他必要庫
 import pandas as pd
 import numpy as np
@@ -1942,7 +1948,7 @@ with tabs[0]:
             'DOGE/USDT': '狗狗幣 (DOGE)',
             'SHIB/USDT': '柴犬幣 (SHIB)'
         }
-        selected_symbol = st.selectbox('選擇加密貨幣', list(coin_options.keys()), format_func=lambda x: coin_options[x])
+        selected_symbol = st.selectbox('選擇加密貨幣', list(coin_options.keys()), format_func=lambda x: coin_options[x], key="symbol_select")
     
     with col2:
         timeframe_options = {
@@ -1952,16 +1958,16 @@ with tabs[0]:
             '1d': '1天',
             '1w': '1週'
         }
-        selected_timeframe = st.selectbox('選擇時間框架', list(timeframe_options.keys()), format_func=lambda x: timeframe_options[x])
+        selected_timeframe = st.selectbox('選擇時間框架', list(timeframe_options.keys()), format_func=lambda x: timeframe_options[x], key="timeframe_select")
     
     with col3:
         # 額外選項，例如交易量顯示、指標選擇等
-        show_volume = st.checkbox('顯示交易量', value=True)
+        show_volume = st.checkbox('顯示交易量', value=True, key="show_volume_checkbox")
         
     with col4:
         # 分析按鈕
         st.markdown("<br>", unsafe_allow_html=True)  # 添加一些空間來對齊按鈕
-        analyze_button = st.button('開始分析', use_container_width=True)
+        analyze_button = st.button('開始分析', use_container_width=True, key="analyze_button")
     
     # 使用卡片式設計展示主要圖表
     st.markdown('<div class="stCardContainer">', unsafe_allow_html=True)
@@ -2795,15 +2801,15 @@ with tabs[3]:
     st.markdown("<h3>應用設置</h3>", unsafe_allow_html=True)
     
     # 主題設置
-    st.radio("主題", ["深色模式", "淺色模式"], index=0)
+    st.radio("主題", ["深色模式", "淺色模式"], index=0, key="theme_radio")
     
     # 默認圖表時間範圍
-    st.select_slider("默認圖表時間範圍", options=["50", "100", "200", "500", "全部"], value="100")
+    st.select_slider("默認圖表時間範圍", options=["50", "100", "200", "500", "全部"], value="100", key="chart_range_slider")
     
     # 顯示設置
-    st.checkbox("顯示交易量圖表", value=True)
-    st.checkbox("顯示移動平均線", value=True)
-    st.checkbox("顯示支撐/阻力位", value=True)
+    st.checkbox("顯示交易量圖表", value=True, key="show_volume_setting")
+    st.checkbox("顯示移動平均線", value=True, key="show_ma_setting")
+    st.checkbox("顯示支撐/阻力位", value=True, key="show_sr_setting")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -2812,26 +2818,26 @@ with tabs[3]:
     st.markdown("<h3>提醒設置</h3>", unsafe_allow_html=True)
     
     # 提醒開關
-    enable_alerts = st.checkbox("啟用交易提醒", value=True)
+    enable_alerts = st.checkbox("啟用交易提醒", value=True, key="enable_alerts")
     
     # 提醒方式
-    alert_method = st.radio("提醒方式", ["電子郵件", "網頁通知"], index=0)
+    alert_method = st.radio("提醒方式", ["電子郵件", "網頁通知"], index=0, key="alert_method")
     
     # 提醒觸發條件
-    st.slider("最低策略評分觸發閾值", min_value=1, max_value=10, value=8)
-    st.slider("最低信心水平觸發閾值 (%)", min_value=50, max_value=100, value=70)
+    st.slider("最低策略評分觸發閾值", min_value=1, max_value=10, value=8, key="score_threshold")
+    st.slider("最低信心水平觸發閾值 (%)", min_value=50, max_value=100, value=70, key="confidence_threshold")
     
     # 電子郵件設置
     if alert_method == "電子郵件":
-        test_email = st.text_input("電子郵件地址", value="terry172323@gmail.com")
+        test_email = st.text_input("電子郵件地址", value="terry172323@gmail.com", key="email_input")
     
     # 保存提醒設置
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("保存提醒設置"):
+        if st.button("保存提醒設置", key="save_alert_settings"):
             st.success("提醒設置已保存")
     with col2:
-        if st.button("發送測試郵件"):
+        if st.button("發送測試郵件", key="send_test_email"):
             try:
                 # 發送測試提醒
                 test_result = test_email_alert()
@@ -2849,16 +2855,16 @@ with tabs[3]:
     st.markdown("<h3>API 設置</h3>", unsafe_allow_html=True)
     
     # OpenAI API 設置
-    openai_key = st.text_input("OpenAI API 密鑰", type="password", value="*" * 10 if OPENAI_API_KEY else "")
+    openai_key = st.text_input("OpenAI API 密鑰", type="password", value="*" * 10 if OPENAI_API_KEY else "", key="openai_api_key")
     
     # DeepSeek API 設置
-    deepseek_key = st.text_input("DeepSeek API 密鑰", type="password", value="*" * 10 if DEEPSEEK_API_KEY else "")
+    deepseek_key = st.text_input("DeepSeek API 密鑰", type="password", value="*" * 10 if DEEPSEEK_API_KEY else "", key="deepseek_api_key")
     
     # CoinMarketCap API 設置
-    cmc_key = st.text_input("CoinMarketCap API 密鑰", type="password", value="*" * 10 if COINMARKETCAP_API_KEY else "")
+    cmc_key = st.text_input("CoinMarketCap API 密鑰", type="password", value="*" * 10 if COINMARKETCAP_API_KEY else "", key="cmc_api_key")
     
     # 保存按鈕
-    st.button("保存設置")
+    st.button("保存設置", key="save_api_settings")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
