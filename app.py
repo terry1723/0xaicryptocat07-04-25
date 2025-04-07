@@ -2800,11 +2800,33 @@ with tabs[3]:
     
     # 電子郵件設置
     if alert_method == "電子郵件":
-        st.text_input("電子郵件地址", value="terry172323@gmail.com")
+        test_email = st.text_input("電子郵件地址", value="terry172323@gmail.com")
     
     # 保存提醒設置
-    if st.button("保存提醒設置"):
-        st.success("提醒設置已保存")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("保存提醒設置"):
+            st.success("提醒設置已保存")
+    with col2:
+        if st.button("發送測試郵件"):
+            try:
+                # 發送測試提醒
+                test_result = send_email_alert(
+                    symbol="BTC/USDT", 
+                    timeframe="1h", 
+                    strategy_name="測試策略", 
+                    score=9.5, 
+                    entry_point="當前價格附近", 
+                    target_price="上漲5-8%", 
+                    stop_loss="下跌2%處", 
+                    confidence=0.85
+                )
+                if test_result:
+                    st.success("測試郵件發送成功！請檢查您的郵箱。")
+                else:
+                    st.error("測試郵件發送失敗。請確認環境變數設置是否正確。")
+            except Exception as e:
+                st.error(f"發送測試郵件時出錯: {str(e)}")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
