@@ -71,15 +71,35 @@ from email.utils import formatdate
 # 嘗試導入WhatsApp提醒模塊，如果失敗則設置為None
 try:
     from whatsapp_alert import send_whatsapp_alert, format_crypto_alert, test_whatsapp_alert, check_whatsapp_connection
-    WHATSAPP_AVAILABLE = True
-except ImportError:
-    print("WhatsApp模塊未安裝或無法導入，WhatsApp提醒功能將不可用")
+    # 額外測試WhatsApp連接是否正常
+    try:
+        test_connection = check_whatsapp_connection()
+        WHATSAPP_AVAILABLE = test_connection.get("status") == "connected"
+        if not WHATSAPP_AVAILABLE:
+            print(f"WhatsApp連接測試失敗: {test_connection.get('message', '未知錯誤')}")
+    except Exception as e:
+        print(f"WhatsApp連接測試出錯: {str(e)}")
+        WHATSAPP_AVAILABLE = False
+except (ImportError, ModuleNotFoundError) as e:
+    print(f"WhatsApp模塊未安裝或無法導入: {str(e)}，WhatsApp提醒功能將不可用")
     WHATSAPP_AVAILABLE = False
+except Exception as e:
+    print(f"加載WhatsApp模塊時發生意外錯誤: {str(e)}，WhatsApp提醒功能將不可用")
+    WHATSAPP_AVAILABLE = False
+
+# 無論出於什麼原因WhatsApp不可用，都確保有替代函數
+if not WHATSAPP_AVAILABLE:
     # 創建空函數作為替代，防止調用出錯
-    def send_whatsapp_alert(*args, **kwargs): return False
-    def format_crypto_alert(*args, **kwargs): return ""
-    def test_whatsapp_alert(*args, **kwargs): return False
-    def check_whatsapp_connection(*args, **kwargs): return {"status": "error", "message": "WhatsApp模塊未安裝"}
+    def send_whatsapp_alert(*args, **kwargs): 
+        print("WhatsApp提醒功能不可用，無法發送提醒")
+        return False
+    def format_crypto_alert(*args, **kwargs): 
+        return "WhatsApp提醒功能不可用"
+    def test_whatsapp_alert(*args, **kwargs): 
+        print("WhatsApp提醒功能不可用，無法發送測試訊息")
+        return False
+    def check_whatsapp_connection(*args, **kwargs): 
+        return {"status": "error", "message": "WhatsApp模塊未安裝或配置不正確"}
 
 # 加載環境變數
 load_dotenv()
@@ -2869,7 +2889,14 @@ with tabs[3]:
     # WhatsApp設置
     elif alert_method == "WhatsApp":
         if not WHATSAPP_AVAILABLE:
-            st.error("WhatsApp功能未啟用。請先安裝Smithery MCP依賴並重新部署應用。")
+            st.warning("WhatsApp功能未啟用。您的提醒將自動降級為電子郵件。")
+            st.info("如果您希望使用WhatsApp功能，請確保：\n1. 已安裝Smithery MCP依賴\n2. 已設置WHATSAPP_MCP_KEY環境變數\n3. 已設置WHATSAPP_SESSION_NAME環境變數")
+            
+            # 仍然顯示手機號碼輸入框，但添加禁用提示
+            st.text_input("WhatsApp手機號碼 (當前不可用)", value="", disabled=True, key="whatsapp_phone_disabled")
+            
+            # 顯示降級提示
+            st.success("系統將自動將WhatsApp提醒降級為電子郵件發送")
         else:
             # WhatsApp手機號碼設置
             st.text_input("WhatsApp手機號碼 (包含國家代碼，如852XXXXXXXX)", value="", key="whatsapp_phone")
@@ -2901,9 +2928,22 @@ with tabs[3]:
                                 st.success(f"測試WhatsApp發送成功！請檢查 {phone_number} 的手機。")
                             else:
                                 st.error("WhatsApp發送失敗。請確認手機號碼和環境變數設置是否正確。")
+                                st.info("將自動降級為電子郵件發送。")
+                                # 測試電子郵件發送
+                                email_result = test_email_alert()
+                                if email_result:
+                                    st.success("已降級使用電子郵件發送成功")
                     except Exception as e:
                         st.error(f"發送測試WhatsApp時出錯: {str(e)}")
-                    
+                        st.info("將自動降級為電子郵件發送")
+                        # 測試電子郵件發送
+                        try:
+                            email_result = test_email_alert()
+                            if email_result:
+                                st.success("已降級使用電子郵件發送成功")
+                        except Exception as email_error:
+                            st.error(f"嘗試降級發送電子郵件時也出錯: {str(email_error)}")
+    
     # 網頁通知設置
     elif alert_method == "網頁通知":
         st.info("網頁通知功能僅在瀏覽器中有效，需要允許通知權限。")
@@ -2942,16 +2982,21 @@ with tabs[3]:
     st.markdown("""
     **0xAI CryptoCat** 是一個使用多模型 AI 技術的加密貨幣分析工具，結合了技術分析和 AI 驅動的市場分析。
     
-    **版本**: v3.6.0 (WhatsApp通知版)
+    **版本**: v3.6.0 (WhatsApp通知增強版)
     
     **開發者**: Terry Lee
     
     **更新內容**:
-    - 添加WhatsApp通知功能 (via jlucaso1/whatsapp-mcp-ts)
+    - 添加WhatsApp通知功能 (可選依賴，自動降級)
     - 優化 Binance API 連接和重試機制
     - 增強價格合理性驗證
     - 添加多交易所備選數據源
     - 改進用戶界面和數據展示
+    
+    **特別說明**:
+    - WhatsApp通知功能為可選依賴，系統會檢測其可用性
+    - 當WhatsApp功能不可用時，系統會自動降級為電子郵件通知
+    - 若要使用WhatsApp功能，需安裝jlucaso1/whatsapp-mcp-ts依賴並設置相關環境變數
     
     **使用的 AI 模型**:
     - DeepSeek V3 (技術分析和整合分析)
@@ -3180,33 +3225,95 @@ def check_alert_conditions(strategy_text, symbol, timeframe, confidence):
         elif alert_method == "WhatsApp":
             # 檢查WhatsApp功能是否可用
             if not WHATSAPP_AVAILABLE:
-                st.warning("WhatsApp提醒功能已觸發，但未安裝WhatsApp模塊。請安裝Smithery MCP依賴。")
-                return False
+                st.warning("WhatsApp提醒功能已觸發，但WhatsApp模塊不可用。將嘗試使用電子郵件發送提醒。")
+                # 降級為電子郵件提醒
+                email_sent = send_email_alert(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    strategy_name=strategy_name.strip(),
+                    score=score,
+                    entry_point=entry_point,
+                    target_price=target_price,
+                    stop_loss=stop_loss,
+                    confidence=confidence
+                )
+                if email_sent:
+                    st.success("已降級使用電子郵件提醒並成功發送")
+                    alerts_sent = True
+                return alerts_sent
                 
             # 獲取WhatsApp設置
             phone_number = st.session_state.get("whatsapp_phone", "")
             
             # 檢查是否有電話號碼
             if not phone_number:
-                st.warning("WhatsApp提醒功能已觸發，但缺少手機號碼設置。請在設置頁面配置WhatsApp手機號碼。")
-                return False
-                
-            # 格式化WhatsApp訊息
-            whatsapp_message = format_crypto_alert(
-                symbol=symbol,
-                timeframe=timeframe,
-                strategy_name=strategy_name.strip(),
-                score=score,
-                entry_point=entry_point,
-                target_price=target_price,
-                stop_loss=stop_loss,
-                confidence=confidence
-            )
+                st.warning("WhatsApp提醒功能已觸發，但缺少手機號碼設置。將嘗試使用電子郵件發送提醒。")
+                # 降級為電子郵件提醒
+                email_sent = send_email_alert(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    strategy_name=strategy_name.strip(),
+                    score=score,
+                    entry_point=entry_point,
+                    target_price=target_price,
+                    stop_loss=stop_loss,
+                    confidence=confidence
+                )
+                if email_sent:
+                    st.success("已降級使用電子郵件提醒並成功發送")
+                    alerts_sent = True
+                return alerts_sent
             
-            # 發送WhatsApp提醒
-            whatsapp_sent = send_whatsapp_alert(phone_number, whatsapp_message)
-            if whatsapp_sent:
-                alerts_sent = True
+            try:    
+                # 格式化WhatsApp訊息
+                whatsapp_message = format_crypto_alert(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    strategy_name=strategy_name.strip(),
+                    score=score,
+                    entry_point=entry_point,
+                    target_price=target_price,
+                    stop_loss=stop_loss,
+                    confidence=confidence
+                )
+                
+                # 發送WhatsApp提醒
+                whatsapp_sent = send_whatsapp_alert(phone_number, whatsapp_message)
+                if whatsapp_sent:
+                    st.success(f"已成功發送WhatsApp提醒至 {phone_number}")
+                    alerts_sent = True
+                else:
+                    st.warning("WhatsApp發送失敗，將嘗試使用電子郵件發送提醒")
+                    # 降級為電子郵件提醒
+                    email_sent = send_email_alert(
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        strategy_name=strategy_name.strip(),
+                        score=score,
+                        entry_point=entry_point,
+                        target_price=target_price,
+                        stop_loss=stop_loss,
+                        confidence=confidence
+                    )
+                    if email_sent:
+                        st.success("已降級使用電子郵件提醒並成功發送")
+                        alerts_sent = True
+            except Exception as e:
+                st.error(f"發送WhatsApp提醒時出錯: {str(e)}，將嘗試使用電子郵件發送提醒")
+                # 降級為電子郵件提醒
+                email_sent = send_email_alert(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    strategy_name=strategy_name.strip(),
+                    score=score,
+                    entry_point=entry_point,
+                    target_price=target_price,
+                    stop_loss=stop_loss,
+                    confidence=confidence
+                )
+                if email_sent:
+                    st.success("已降級使用電子郵件提醒並成功發送")
+                    alerts_sent = True
         
         elif alert_method == "網頁通知":
             # 顯示網頁通知（暫不支持）
