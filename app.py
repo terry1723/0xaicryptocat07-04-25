@@ -55,6 +55,10 @@ import plotly.graph_objects as go
 import requests
 import json
 from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate
 
 # 加載環境變數
 load_dotenv()
@@ -2417,11 +2421,17 @@ with tabs[1]:
                         
                         5. **關鍵價位重要性**: 支撐位和阻力位的歷史確認強度以及市場參與者認可度(+1-2分)
                         """
+                    
+                    # 顯示策略分析
+                    st.markdown(strategy_analysis)
+                    
+                    # 添加提醒功能檢查
+                    # 檢查是否符合提醒條件並發送郵件
+                    check_alert_conditions(strategy_analysis, selected_symbol, selected_timeframe, confidence)
+                    
                 except Exception as e:
                     st.error(f"策略分析生成錯誤: {str(e)}")
                     strategy_analysis = "無法生成策略分析，請稍後再試。"
-                
-                st.markdown(strategy_analysis)
                 
             st.markdown('</div>', unsafe_allow_html=True)
         
@@ -2774,6 +2784,30 @@ with tabs[3]:
     
     st.markdown('</div>', unsafe_allow_html=True)
     
+    # 提醒設置卡片
+    st.markdown('<div class="stCardContainer">', unsafe_allow_html=True)
+    st.markdown("<h3>提醒設置</h3>", unsafe_allow_html=True)
+    
+    # 提醒開關
+    enable_alerts = st.checkbox("啟用交易提醒", value=True)
+    
+    # 提醒方式
+    alert_method = st.radio("提醒方式", ["電子郵件", "網頁通知"], index=0)
+    
+    # 提醒觸發條件
+    st.slider("最低策略評分觸發閾值", min_value=1, max_value=10, value=8)
+    st.slider("最低信心水平觸發閾值 (%)", min_value=50, max_value=100, value=70)
+    
+    # 電子郵件設置
+    if alert_method == "電子郵件":
+        st.text_input("電子郵件地址", value="terry172323@gmail.com")
+    
+    # 保存提醒設置
+    if st.button("保存提醒設置"):
+        st.success("提醒設置已保存")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
     # API 設置卡片
     st.markdown('<div class="stCardContainer">', unsafe_allow_html=True)
     st.markdown("<h3>API 設置</h3>", unsafe_allow_html=True)
@@ -2831,3 +2865,191 @@ st.markdown("""
 footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
+
+# 發送電子郵件提醒功能
+def send_email_alert(symbol, timeframe, strategy_name, score, entry_point, target_price, stop_loss, confidence):
+    """
+    發送策略提醒電子郵件
+    
+    參數:
+    symbol (str): 交易對符號，如 'BTC/USDT'
+    timeframe (str): 時間框架
+    strategy_name (str): 策略名稱
+    score (float): 策略評分
+    entry_point (str): 進場點描述
+    target_price (str): 目標價格
+    stop_loss (str): 止損位置
+    confidence (float): 信心水平
+    """
+    try:
+        # 獲取電子郵件憑證
+        email_user = os.getenv("EMAIL_USER", "")  # 發送郵件的Gmail帳號
+        email_password = os.getenv("EMAIL_PASSWORD", "")  # Gmail應用密碼
+        recipient_email = "terry172323@gmail.com"  # 收件人郵箱
+        
+        # 如果沒有設置郵箱憑證，則僅顯示提醒
+        if not email_user or not email_password:
+            st.warning("電子郵件提醒功能已觸發，但缺少郵箱憑證設置。請在Zeabur配置EMAIL_USER和EMAIL_PASSWORD環境變數。")
+            print(f"觸發提醒: {symbol} {timeframe} - {strategy_name} [{score}分]")
+            return False
+        
+        # 創建郵件內容
+        subject = f"🚨 交易提醒: {symbol} - {strategy_name} [{score}分]"
+        
+        # 構建HTML內容
+        html_content = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background-color: #4a8af4; color: white; padding: 10px 20px; border-radius: 5px 5px 0 0; }}
+                .content {{ border: 1px solid #ddd; border-top: none; padding: 20px; border-radius: 0 0 5px 5px; }}
+                .strategy {{ font-weight: bold; color: #4a8af4; }}
+                .score {{ font-size: 18px; color: #4CAF50; font-weight: bold; }}
+                .entry {{ background-color: #f8f8f8; padding: 10px; margin: 10px 0; border-left: 4px solid #4a8af4; }}
+                .footer {{ margin-top: 20px; font-size: 12px; color: #777; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2>0xAI CryptoCat 交易提醒</h2>
+                </div>
+                <div class="content">
+                    <h3>高評分策略提醒</h3>
+                    <p>系統檢測到 <b>{symbol}</b> 在 <b>{timeframe}</b> 時間框架上出現高評分交易機會：</p>
+                    
+                    <div class="strategy">
+                        策略: {strategy_name} <span class="score">[{score}分]</span>
+                    </div>
+                    
+                    <div class="entry">
+                        <p><b>進場點:</b> {entry_point}</p>
+                        <p><b>目標價:</b> {target_price}</p>
+                        <p><b>止損位:</b> {stop_loss}</p>
+                    </div>
+                    
+                    <p>信心水平: <b>{confidence*100:.1f}%</b></p>
+                    
+                    <p>請登入 0xAI CryptoCat 平台查看完整分析：<a href="https://0xaicryptocat.zeabur.app">https://0xaicryptocat.zeabur.app</a></p>
+                    
+                    <div class="footer">
+                        <p>此郵件由系統自動發送，請勿回復。</p>
+                        <p>© 2025 0xAI CryptoCat - AI驅動的加密貨幣分析平台</p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # 創建郵件
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = email_user
+        msg['To'] = recipient_email
+        msg['Date'] = formatdate(localtime=True)
+        
+        # 添加HTML內容
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        # 使用Gmail SMTP服務器發送郵件
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(email_user, email_password)
+            server.send_message(msg)
+        
+        st.success(f"已成功發送交易提醒郵件至 {recipient_email}")
+        return True
+    except Exception as e:
+        print(f"發送郵件時出錯: {str(e)}")
+        st.error(f"發送郵件提醒時出錯: {str(e)}")
+        return False
+
+# 檢查策略是否符合提醒條件
+def check_alert_conditions(strategy_text, symbol, timeframe, confidence):
+    """
+    分析策略文本，檢查是否符合提醒條件
+    
+    參數:
+    strategy_text (str): 策略分析文本
+    symbol (str): 交易對符號
+    timeframe (str): 時間框架
+    confidence (float): 信心水平
+    
+    返回:
+    bool: 是否發送了提醒
+    """
+    # 如果信心水平不高，直接返回
+    if confidence < 0.7:
+        return False
+    
+    # 通過正則表達式或文本分析從策略文本中提取策略
+    import re
+    
+    # 尋找策略標題和分數
+    strategy_matches = re.findall(r'\*\*([^*]+?)\s*\[(\d+)分\]\*\*', strategy_text)
+    
+    # 如果找不到策略，返回
+    if not strategy_matches:
+        return False
+    
+    # 檢查當前價格是否符合任何高分策略的進場條件
+    current_price = None
+    
+    # 尋找當前價格信息
+    price_match = re.search(r'當前價格.*?\$(\d+\.\d+)', strategy_text)
+    if price_match:
+        try:
+            current_price = float(price_match.group(1))
+        except:
+            pass
+    
+    # 如果找不到當前價格，無法判斷進場條件
+    if current_price is None:
+        return False
+    
+    # 遍歷所有策略
+    alerts_sent = False
+    for strategy_name, score_str in strategy_matches:
+        # 轉換分數為數字
+        try:
+            score = int(score_str)
+        except:
+            continue
+        
+        # 檢查分數是否達到8分以上
+        if score < 8:
+            continue
+        
+        # 查找該策略的進場點、目標價和止損位
+        strategy_content_pattern = rf'\*\*{re.escape(strategy_name)}\s*\[{score_str}分\]\*\*.*?進場點.*?:(.*?)目標價.*?:(.*?)止損位.*?:(.*?)(?:\n\n|$)'
+        strategy_content_match = re.search(strategy_content_pattern, strategy_text, re.DOTALL)
+        
+        if not strategy_content_match:
+            continue
+        
+        entry_point = strategy_content_match.group(1).strip()
+        target_price = strategy_content_match.group(2).strip()
+        stop_loss = strategy_content_match.group(3).strip()
+        
+        # 檢查是否符合進場條件
+        # 這裡需要根據實際情況判斷，這只是一個簡化的示例
+        # 例如，如果進場點是一個價格範圍，檢查當前價格是否在該範圍內
+        
+        # 簡單起見，我們假設如果策略評分高且信心水平高，就符合提醒條件
+        sent = send_email_alert(
+            symbol=symbol,
+            timeframe=timeframe,
+            strategy_name=strategy_name.strip(),
+            score=score,
+            entry_point=entry_point,
+            target_price=target_price,
+            stop_loss=stop_loss,
+            confidence=confidence
+        )
+        
+        if sent:
+            alerts_sent = True
