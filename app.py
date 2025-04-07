@@ -63,6 +63,29 @@ from email.utils import formatdate
 # 加載環境變數
 load_dotenv()
 
+# 測試電子郵件提醒功能
+def test_email_alert():
+    """
+    發送測試電子郵件，用於檢驗郵件功能是否正常工作
+    
+    返回:
+    bool: 是否成功發送郵件
+    """
+    try:
+        return send_email_alert(
+            symbol="BTC/USDT", 
+            timeframe="1h", 
+            strategy_name="測試策略", 
+            score=9.5, 
+            entry_point="當前價格附近", 
+            target_price="上漲5-8%", 
+            stop_loss="下跌2%處", 
+            confidence=0.85
+        )
+    except Exception as e:
+        print(f"測試郵件發送錯誤: {str(e)}")
+        return False
+
 # 處理 orjson 相關問題
 import plotly.io._json
 # 如果 orjson 存在，修復 OPT_NON_STR_KEYS 問題
@@ -2811,16 +2834,7 @@ with tabs[3]:
         if st.button("發送測試郵件"):
             try:
                 # 發送測試提醒
-                test_result = send_email_alert(
-                    symbol="BTC/USDT", 
-                    timeframe="1h", 
-                    strategy_name="測試策略", 
-                    score=9.5, 
-                    entry_point="當前價格附近", 
-                    target_price="上漲5-8%", 
-                    stop_loss="下跌2%處", 
-                    confidence=0.85
-                )
+                test_result = test_email_alert()
                 if test_result:
                     st.success("測試郵件發送成功！請檢查您的郵箱。")
                 else:
