@@ -233,11 +233,6 @@ except AttributeError:
             return json.dumps(fig_dict)
     plotly.io._json.to_json_plotly = patched_to_json_plotly
 
-# 安全地從 secrets 或環境變量獲取 API 密鑰
-    return os.getenv(key_name, default_value)
-
-# 從Streamlit secrets或環境變數讀取API密鑰，如果都不存在則使用預設值
-
 # 設置 Bitget MCP 服務器
 
 # DexScreener API函數，獲取加密貨幣數據
