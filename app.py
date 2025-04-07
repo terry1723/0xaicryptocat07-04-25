@@ -2241,79 +2241,7 @@ with tabs[1]:
                         if response.status_code == 200:
                             strategy_analysis = response.json()["choices"][0]["message"]["content"]
                         else:
-                            strategy_analysis = f"## {selected_symbol} 短期策略建議\n\n"
-                                
-                                if final_rec == "buy":
-                                    strategy_analysis += f"""
-                                    1. **突破追漲策略 [8分]**
-                                       - **進場點**: 價格突破${snr_data['near_resistance']:.2f}阻力位，且成交量放大
-                                       - **目標價**: ${smc_data['resistance_level']:.2f}（重要阻力位）
-                                       - **止損位**: ${(snr_data['near_resistance']*0.99):.2f}（阻力位下方約1%）
-                                    
-                                    2. **支撐回調策略 [9分]**
-                                       - **進場點**: 價格回調至${snr_data['near_support']:.2f}支撐位附近，RSI同時回落至50以下
-                                       - **目標價**: ${snr_data['near_resistance']:.2f}（近期阻力位）
-                                       - **止損位**: ${(snr_data['near_support']*0.98):.2f}（支撐位下方約2%）
-                                    
-                                    3. **高點獲利策略 [7分]**
-                                       - **進場點**: 已持有倉位，目前處於盈利狀態
-                                       - **目標價**: 價格接近${smc_data['resistance_level']:.2f}時分批減倉
-                                       - **止損位**: 保留部分倉位，移動止損至入場價格
-                                    """
-                                elif final_rec == "sell":
-                                    strategy_analysis += f"""
-                                    1. **反彈做空策略 [9分]**
-                                       - **進場點**: 價格反彈至阻力位附近${snr_data['near_resistance']:.2f}-${(snr_data['near_resistance']*1.005):.2f}
-                                       - **目標價**: 支撐位${snr_data['near_support']:.2f}（若突破則看下一支撐）
-                                       - **止損位**: 阻力上方${(snr_data['near_resistance']*1.02):.2f}（假突破過濾）
-                                    
-                                    2. **突破追空策略 [7分]**
-                                       - **進場點**: 價格跌破支撐${snr_data['near_support']:.2f}且RSI<50
-                                       - **目標價**: 前低延伸1-2%（${(snr_data['near_support']*0.98):.2f}附近）
-                                       - **止損位**: 重回支撐上方${(snr_data['near_support']*1.01):.2f}
-                                    
-                                    3. **趨勢確認策略 [8分]**
-                                       - **進場點**: 價格在下降趨勢中回調至MA20均線附近
-                                       - **目標價**: ${(snr_data['near_support']*0.95):.2f}（支撐位以下5%）
-                                       - **止損位**: MA20均線上方1%
-                                    """
-                                else:
-                                    strategy_analysis += f"""
-                                    1. **區間震盪策略 [8分]**
-                                       - **進場點**: 價格接近${snr_data['near_support']:.2f}支撐位（低吸）
-                                       - **目標價**: ${snr_data['near_resistance']:.2f}（高拋）
-                                       - **止損位**: ${(snr_data['near_support']*0.97):.2f}（支撐位下方3%）
-                                    
-                                    2. **突破確認策略 [7分]**
-                                       - **進場點**: 價格突破${snr_data['near_resistance']:.2f}或${snr_data['near_support']:.2f}並確認
-                                       - **目標價**: 突破方向延伸5-8%
-                                       - **止損位**: 突破位置附近（假突破保護）
-                                    
-                                    3. **觀望策略 [9分]**
-                                       - **策略內容**: 市場信號混合，暫時觀望不進場
-                                       - **關注點**: ${snr_data['near_support']:.2f}和${snr_data['near_resistance']:.2f}突破情況
-                                       - **執行建議**: 在明確信號出現前，減少交易規模或暫不進場
-                                    """
-                                
-                                # 添加評分標準解釋
-                                strategy_analysis += f"""
-                                
-                                ### 評分標準說明:
-                                
-                                **評分10分制，考慮以下因素:**
-                                
-                                1. **風險回報比**: 計算方式為潛在獲利÷潛在風險。比例>3:1為優(+3分)，>2:1為良(+2分)，<1:1為差(+0分)
-                                
-                                2. **趨勢明確度**: 當前趨勢強度為{smc_data["trend_strength"]:.2f}，{"趨勢明確" if smc_data["trend_strength"] > 0.6 else "趨勢不明確"}(+{max(1, int(smc_data["trend_strength"] * 10 * 0.3))}分)
-                                
-                                3. **技術指標確認**: RSI={snr_data["rsi"]:.1f}，{"超買區間" if snr_data["rsi"] > 70 else "超賣區間" if snr_data["rsi"] < 30 else "中性區間"}，{"支持策略方向" if (final_rec == "buy" and snr_data["rsi"] < 50) or (final_rec == "sell" and snr_data["rsi"] > 50) else "不支持策略方向"}(+1-2分)
-                                
-                                4. **執行難度**: 考慮進場時機識別難度、止損設置合理性、目標價格可達性(+1-2分)
-                                
-                                5. **關鍵價位重要性**: 支撐位和阻力位的歷史確認強度以及市場參與者認可度(+1-2分)
-                                """
-                        else:
-                            # 使用基本策略分析
+                            # 如果API請求失敗，使用備用方案
                             strategy_analysis = f"## {selected_symbol} 短期策略建議\n\n"
                             
                             if final_rec == "buy":
@@ -2385,13 +2313,86 @@ with tabs[1]:
                             
                             5. **關鍵價位重要性**: 支撐位和阻力位的歷史確認強度以及市場參與者認可度(+1-2分)
                             """
-                    except Exception as e:
-                        st.error(f"策略分析生成錯誤: {str(e)}")
-                        strategy_analysis = "無法生成策略分析，請稍後再試。"
-                    
-                    st.markdown(strategy_analysis)
-                    
-                st.markdown('</div>', unsafe_allow_html=True)
+                    else:
+                        # 使用基本策略分析
+                        strategy_analysis = f"## {selected_symbol} 短期策略建議\n\n"
+                        
+                        if final_rec == "buy":
+                            strategy_analysis += f"""
+                            1. **突破追漲策略 [8分]**
+                               - **進場點**: 價格突破${snr_data['near_resistance']:.2f}阻力位，且成交量放大
+                               - **目標價**: ${smc_data['resistance_level']:.2f}（重要阻力位）
+                               - **止損位**: ${(snr_data['near_resistance']*0.99):.2f}（阻力位下方約1%）
+                            
+                            2. **支撐回調策略 [9分]**
+                               - **進場點**: 價格回調至${snr_data['near_support']:.2f}支撐位附近，RSI同時回落至50以下
+                               - **目標價**: ${snr_data['near_resistance']:.2f}（近期阻力位）
+                               - **止損位**: ${(snr_data['near_support']*0.98):.2f}（支撐位下方約2%）
+                            
+                            3. **高點獲利策略 [7分]**
+                               - **進場點**: 已持有倉位，目前處於盈利狀態
+                               - **目標價**: 價格接近${smc_data['resistance_level']:.2f}時分批減倉
+                               - **止損位**: 保留部分倉位，移動止損至入場價格
+                            """
+                        elif final_rec == "sell":
+                            strategy_analysis += f"""
+                            1. **反彈做空策略 [9分]**
+                               - **進場點**: 價格反彈至阻力位附近${snr_data['near_resistance']:.2f}-${(snr_data['near_resistance']*1.005):.2f}
+                               - **目標價**: 支撐位${snr_data['near_support']:.2f}（若突破則看下一支撐）
+                               - **止損位**: 阻力上方${(snr_data['near_resistance']*1.02):.2f}（假突破過濾）
+                            
+                            2. **突破追空策略 [7分]**
+                               - **進場點**: 價格跌破支撐${snr_data['near_support']:.2f}且RSI<50
+                               - **目標價**: 前低延伸1-2%（${(snr_data['near_support']*0.98):.2f}附近）
+                               - **止損位**: 重回支撐上方${(snr_data['near_support']*1.01):.2f}
+                            
+                            3. **趨勢確認策略 [8分]**
+                               - **進場點**: 價格在下降趨勢中回調至MA20均線附近
+                               - **目標價**: ${(snr_data['near_support']*0.95):.2f}（支撐位以下5%）
+                               - **止損位**: MA20均線上方1%
+                            """
+                        else:
+                            strategy_analysis += f"""
+                            1. **區間震盪策略 [8分]**
+                               - **進場點**: 價格接近${snr_data['near_support']:.2f}支撐位（低吸）
+                               - **目標價**: ${snr_data['near_resistance']:.2f}（高拋）
+                               - **止損位**: ${(snr_data['near_support']*0.97):.2f}（支撐位下方3%）
+                            
+                            2. **突破確認策略 [7分]**
+                               - **進場點**: 價格突破${snr_data['near_resistance']:.2f}或${snr_data['near_support']:.2f}並確認
+                               - **目標價**: 突破方向延伸5-8%
+                               - **止損位**: 突破位置附近（假突破保護）
+                            
+                            3. **觀望策略 [9分]**
+                               - **策略內容**: 市場信號混合，暫時觀望不進場
+                               - **關注點**: ${snr_data['near_support']:.2f}和${snr_data['near_resistance']:.2f}突破情況
+                               - **執行建議**: 在明確信號出現前，減少交易規模或暫不進場
+                            """
+                        
+                        # 添加評分標準解釋
+                        strategy_analysis += f"""
+                        
+                        ### 評分標準說明:
+                        
+                        **評分10分制，考慮以下因素:**
+                        
+                        1. **風險回報比**: 計算方式為潛在獲利÷潛在風險。比例>3:1為優(+3分)，>2:1為良(+2分)，<1:1為差(+0分)
+                        
+                        2. **趨勢明確度**: 當前趨勢強度為{smc_data["trend_strength"]:.2f}，{"趨勢明確" if smc_data["trend_strength"] > 0.6 else "趨勢不明確"}(+{max(1, int(smc_data["trend_strength"] * 10 * 0.3))}分)
+                        
+                        3. **技術指標確認**: RSI={snr_data["rsi"]:.1f}，{"超買區間" if snr_data["rsi"] > 70 else "超賣區間" if snr_data["rsi"] < 30 else "中性區間"}，{"支持策略方向" if (final_rec == "buy" and snr_data["rsi"] < 50) or (final_rec == "sell" and snr_data["rsi"] > 50) else "不支持策略方向"}(+1-2分)
+                        
+                        4. **執行難度**: 考慮進場時機識別難度、止損設置合理性、目標價格可達性(+1-2分)
+                        
+                        5. **關鍵價位重要性**: 支撐位和阻力位的歷史確認強度以及市場參與者認可度(+1-2分)
+                        """
+                except Exception as e:
+                    st.error(f"策略分析生成錯誤: {str(e)}")
+                    strategy_analysis = "無法生成策略分析，請稍後再試。"
+                
+                st.markdown(strategy_analysis)
+                
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # 整合 AI 分析結果 (DeepSeek V3)
         st.markdown('<div class="stCardContainer">', unsafe_allow_html=True)
