@@ -63,9 +63,6 @@ import plotly.graph_objects as go
 import requests
 import json
 from dotenv import load_dotenv
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from email.utils import formatdate
 
 # 嘗試導入WhatsApp提醒模塊，如果失敗則設置為None
@@ -103,49 +100,6 @@ if not WHATSAPP_AVAILABLE:
 
 # 加載環境變數
 load_dotenv()
-
-# 測試電子郵件提醒功能
-def test_email_alert():
-    """
-    發送測試電子郵件，用於檢驗郵件功能是否正常工作
-    
-    返回:
-    bool: 是否成功發送郵件
-    """
-    try:
-        return send_email_alert(
-            symbol="BTC/USDT", 
-            timeframe="1h", 
-            strategy_name="測試策略", 
-            score=9.5, 
-            entry_point="當前價格附近", 
-            target_price="上漲5-8%", 
-            stop_loss="下跌2%處", 
-            confidence=0.85
-        )
-    except Exception as e:
-        print(f"測試郵件發送錯誤: {str(e)}")
-        return False
-
-# 處理 orjson 相關問題
-import plotly.io._json
-# 如果 orjson 存在，修復 OPT_NON_STR_KEYS 問題
-try:
-    import orjson
-    if not hasattr(orjson, 'OPT_NON_STR_KEYS'):
-        orjson.OPT_NON_STR_KEYS = 2  # 定義缺失的常量
-except ImportError:
-    pass
-except AttributeError:
-    # 修改 _json_to_plotly 方法，避免使用 OPT_NON_STR_KEYS
-    orig_to_json_plotly = plotly.io._json.to_json_plotly
-    def patched_to_json_plotly(fig_dict, *args, **kwargs):
-        try:
-            return orig_to_json_plotly(fig_dict, *args, **kwargs)
-        except AttributeError:
-            # 使用 json 而不是 orjson 進行序列化
-            return json.dumps(fig_dict)
-    plotly.io._json.to_json_plotly = patched_to_json_plotly
 
 # 安全地從 secrets 或環境變量獲取 API 密鑰
 def get_api_key(key_name, default_value=None):
@@ -2855,99 +2809,56 @@ with tabs[3]:
     # 提醒開關
     enable_alerts = st.checkbox("啟用交易提醒", value=True, key="enable_alerts")
     
-    # 提醒方式
-    alert_options = ["電子郵件", "WhatsApp", "網頁通知"]
-    alert_method = st.radio("提醒方式", alert_options, index=0, key="alert_method")
+    # 設置WhatsApp為唯一提醒方式
+    st.markdown("<h4>提醒方式: WhatsApp</h4>", unsafe_allow_html=True)
+    
+    # 設定會話狀態變數以確保其他代碼正常工作
+    st.session_state["alert_method"] = "WhatsApp"
     
     # 提醒觸發條件
     st.slider("最低策略評分觸發閾值", min_value=1, max_value=10, value=8, key="score_threshold")
     st.slider("最低信心水平觸發閾值 (%)", min_value=50, max_value=100, value=70, key="confidence_threshold")
     
-    # 電子郵件設置
-    if alert_method == "電子郵件":
-        test_email = st.text_input("電子郵件地址", value="terry172323@gmail.com", key="email_input")
-    
-        # 保存提醒設置
+    # WhatsApp設置
+    if not WHATSAPP_AVAILABLE:
+        st.warning("WhatsApp功能未啟用。請確保已正確設置環境變數。")
+        st.info("要使用WhatsApp功能，請確保：\n1. 已安裝Smithery MCP依賴\n2. 已設置WHATSAPP_MCP_KEY環境變數\n3. 已設置WHATSAPP_SESSION_NAME環境變數")
+        
+        # 顯示手機號碼輸入框，但添加禁用提示
+        st.text_input("WhatsApp手機號碼 (當前不可用)", value="", disabled=True, key="whatsapp_phone_disabled")
+    else:
+        # WhatsApp手機號碼設置
+        st.text_input("WhatsApp手機號碼 (包含國家代碼，如852XXXXXXXX)", value="", key="whatsapp_phone")
+        
+        # 顯示WhatsApp MCP連接狀態
+        whatsapp_status = check_whatsapp_connection()
+        if whatsapp_status.get("status") == "connected":
+            st.success("WhatsApp連接狀態: 已連接")
+        else:
+            st.warning(f"WhatsApp連接狀態: 未連接 ({whatsapp_status.get('message', '未知錯誤')})")
+            st.info("請確保Zeabur環境變數中設置了WHATSAPP_MCP_KEY和WHATSAPP_SESSION_NAME")
+        
+        # 保存和測試按鈕
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("保存提醒設置", key="save_alert_settings"):
-                st.success("提醒設置已保存")
+            if st.button("保存提醒設置", key="save_whatsapp_settings"):
+                st.success("WhatsApp設置已保存")
         with col2:
-            if st.button("發送測試郵件", key="send_test_email"):
+            if st.button("發送測試WhatsApp", key="send_test_whatsapp"):
                 try:
-                    # 發送測試提醒
-                    test_result = test_email_alert()
-                    if test_result:
-                        st.success("測試郵件發送成功！請檢查您的郵箱。")
+                    # 獲取手機號碼
+                    phone_number = st.session_state.get("whatsapp_phone", "")
+                    if not phone_number:
+                        st.error("請先輸入有效的WhatsApp手機號碼")
                     else:
-                        st.error("測試郵件發送失敗。請確認環境變數設置是否正確。")
-                except Exception as e:
-                    st.error(f"發送測試郵件時出錯: {str(e)}")
-    
-    # WhatsApp設置
-    elif alert_method == "WhatsApp":
-        if not WHATSAPP_AVAILABLE:
-            st.warning("WhatsApp功能未啟用。您的提醒將自動降級為電子郵件。")
-            st.info("如果您希望使用WhatsApp功能，請確保：\n1. 已安裝Smithery MCP依賴\n2. 已設置WHATSAPP_MCP_KEY環境變數\n3. 已設置WHATSAPP_SESSION_NAME環境變數")
-            
-            # 仍然顯示手機號碼輸入框，但添加禁用提示
-            st.text_input("WhatsApp手機號碼 (當前不可用)", value="", disabled=True, key="whatsapp_phone_disabled")
-            
-            # 顯示降級提示
-            st.success("系統將自動將WhatsApp提醒降級為電子郵件發送")
-        else:
-            # WhatsApp手機號碼設置
-            st.text_input("WhatsApp手機號碼 (包含國家代碼，如852XXXXXXXX)", value="", key="whatsapp_phone")
-            
-            # 顯示WhatsApp MCP連接狀態
-            whatsapp_status = check_whatsapp_connection()
-            if whatsapp_status.get("status") == "connected":
-                st.success("WhatsApp連接狀態: 已連接")
-            else:
-                st.warning(f"WhatsApp連接狀態: 未連接 ({whatsapp_status.get('message', '未知錯誤')})")
-                st.info("請確保Zeabur環境變數中設置了WHATSAPP_MCP_KEY和WHATSAPP_SESSION_NAME")
-            
-            # 保存和測試按鈕
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("保存提醒設置", key="save_whatsapp_settings"):
-                    st.success("WhatsApp設置已保存")
-            with col2:
-                if st.button("發送測試WhatsApp", key="send_test_whatsapp"):
-                    try:
-                        # 獲取手機號碼
-                        phone_number = st.session_state.get("whatsapp_phone", "")
-                        if not phone_number:
-                            st.error("請先輸入有效的WhatsApp手機號碼")
+                        # 發送測試WhatsApp
+                        test_result = test_whatsapp_alert(phone_number)
+                        if test_result:
+                            st.success(f"測試WhatsApp發送成功！請檢查 {phone_number} 的手機。")
                         else:
-                            # 發送測試WhatsApp
-                            test_result = test_whatsapp_alert(phone_number)
-                            if test_result:
-                                st.success(f"測試WhatsApp發送成功！請檢查 {phone_number} 的手機。")
-                            else:
-                                st.error("WhatsApp發送失敗。請確認手機號碼和環境變數設置是否正確。")
-                                st.info("將自動降級為電子郵件發送。")
-                                # 測試電子郵件發送
-                                email_result = test_email_alert()
-                                if email_result:
-                                    st.success("已降級使用電子郵件發送成功")
-                    except Exception as e:
-                        st.error(f"發送測試WhatsApp時出錯: {str(e)}")
-                        st.info("將自動降級為電子郵件發送")
-                        # 測試電子郵件發送
-                        try:
-                            email_result = test_email_alert()
-                            if email_result:
-                                st.success("已降級使用電子郵件發送成功")
-                        except Exception as email_error:
-                            st.error(f"嘗試降級發送電子郵件時也出錯: {str(email_error)}")
-    
-    # 網頁通知設置
-    elif alert_method == "網頁通知":
-        st.info("網頁通知功能僅在瀏覽器中有效，需要允許通知權限。")
-        
-        if st.button("保存提醒設置", key="save_webnotif_settings"):
-            st.success("網頁通知設置已保存")
+                            st.error("WhatsApp發送失敗。請確認手機號碼和環境變數設置是否正確。")
+                except Exception as e:
+                    st.error(f"發送測試WhatsApp時出錯: {str(e)}")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -2980,21 +2891,22 @@ with tabs[3]:
     st.markdown("""
     **0xAI CryptoCat** 是一個使用多模型 AI 技術的加密貨幣分析工具，結合了技術分析和 AI 驅動的市場分析。
     
-    **版本**: v3.6.0 (WhatsApp通知增強版)
+    **版本**: v3.7.0 (WhatsApp專屬版)
     
     **開發者**: Terry Lee
     
     **更新內容**:
-    - 添加WhatsApp通知功能 (可選依賴，自動降級)
+    - 精簡為WhatsApp專屬通知版本
+    - 移除電子郵件和網頁通知功能
     - 優化 Binance API 連接和重試機制
     - 增強價格合理性驗證
     - 添加多交易所備選數據源
-    - 改進用戶界面和數據展示
     
-    **特別說明**:
-    - WhatsApp通知功能為可選依賴，系統會檢測其可用性
-    - 當WhatsApp功能不可用時，系統會自動降級為電子郵件通知
-    - 若要使用WhatsApp功能，需安裝jlucaso1/whatsapp-mcp-ts依賴並設置相關環境變數
+    **WhatsApp設置說明**:
+    - 請確保已安裝Smithery MCP依賴(jlucaso1/whatsapp-mcp-ts)
+    - 必須設置WHATSAPP_MCP_KEY環境變數
+    - 必須設置WHATSAPP_SESSION_NAME環境變數
+    - 在設置頁面中正確填寫手機號碼(含國家代碼)
     
     **使用的 AI 模型**:
     - DeepSeek V3 (技術分析和整合分析)
@@ -3018,108 +2930,6 @@ st.markdown("""
 footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
-
-# 發送電子郵件提醒功能
-def send_email_alert(symbol, timeframe, strategy_name, score, entry_point, target_price, stop_loss, confidence):
-    """
-    發送策略提醒電子郵件
-    
-    參數:
-    symbol (str): 交易對符號，如 'BTC/USDT'
-    timeframe (str): 時間框架
-    strategy_name (str): 策略名稱
-    score (float): 策略評分
-    entry_point (str): 進場點描述
-    target_price (str): 目標價格
-    stop_loss (str): 止損位置
-    confidence (float): 信心水平
-    """
-    try:
-        # 獲取電子郵件憑證
-        email_user = os.getenv("EMAIL_USER", "")  # 發送郵件的Gmail帳號
-        email_password = os.getenv("EMAIL_PASSWORD", "")  # Gmail應用密碼
-        recipient_email = "terry172323@gmail.com"  # 收件人郵箱
-        
-        # 如果沒有設置郵箱憑證，則僅顯示提醒
-        if not email_user or not email_password:
-            st.warning("電子郵件提醒功能已觸發，但缺少郵箱憑證設置。請在Zeabur配置EMAIL_USER和EMAIL_PASSWORD環境變數。")
-            print(f"觸發提醒: {symbol} {timeframe} - {strategy_name} [{score}分]")
-            return False
-        
-        # 創建郵件內容
-        subject = f"🚨 交易提醒: {symbol} - {strategy_name} [{score}分]"
-        
-        # 構建HTML內容
-        html_content = f"""
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background-color: #4a8af4; color: white; padding: 10px 20px; border-radius: 5px 5px 0 0; }}
-                .content {{ border: 1px solid #ddd; border-top: none; padding: 20px; border-radius: 0 0 5px 5px; }}
-                .strategy {{ font-weight: bold; color: #4a8af4; }}
-                .score {{ font-size: 18px; color: #4CAF50; font-weight: bold; }}
-                .entry {{ background-color: #f8f8f8; padding: 10px; margin: 10px 0; border-left: 4px solid #4a8af4; }}
-                .footer {{ margin-top: 20px; font-size: 12px; color: #777; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h2>0xAI CryptoCat 交易提醒</h2>
-                </div>
-                <div class="content">
-                    <h3>高評分策略提醒</h3>
-                    <p>系統檢測到 <b>{symbol}</b> 在 <b>{timeframe}</b> 時間框架上出現高評分交易機會：</p>
-                    
-                    <div class="strategy">
-                        策略: {strategy_name} <span class="score">[{score}分]</span>
-                    </div>
-                    
-                    <div class="entry">
-                        <p><b>進場點:</b> {entry_point}</p>
-                        <p><b>目標價:</b> {target_price}</p>
-                        <p><b>止損位:</b> {stop_loss}</p>
-                    </div>
-                    
-                    <p>信心水平: <b>{confidence*100:.1f}%</b></p>
-                    
-                    <p>請登入 0xAI CryptoCat 平台查看完整分析：<a href="https://0xaicryptocat.zeabur.app">https://0xaicryptocat.zeabur.app</a></p>
-                    
-                    <div class="footer">
-                        <p>此郵件由系統自動發送，請勿回復。</p>
-                        <p>© 2025 0xAI CryptoCat - AI驅動的加密貨幣分析平台</p>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        # 創建郵件
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From'] = email_user
-        msg['To'] = recipient_email
-        msg['Date'] = formatdate(localtime=True)
-        
-        # 添加HTML內容
-        msg.attach(MIMEText(html_content, 'html'))
-        
-        # 使用Gmail SMTP服務器發送郵件
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(email_user, email_password)
-            server.send_message(msg)
-        
-        st.success(f"已成功發送交易提醒郵件至 {recipient_email}")
-        return True
-    except Exception as e:
-        print(f"發送郵件時出錯: {str(e)}")
-        st.error(f"發送郵件提醒時出錯: {str(e)}")
-        return False
 
 # 檢查策略是否符合提醒條件
 def check_alert_conditions(strategy_text, symbol, timeframe, confidence):
@@ -3188,26 +2998,29 @@ def check_alert_conditions(strategy_text, symbol, timeframe, confidence):
         target_price = strategy_content_match.group(2).strip()
         stop_loss = strategy_content_match.group(3).strip()
         
-        # 檢查是否符合進場條件
-        # 這裡需要根據實際情況判斷，這只是一個簡化的示例
-        # 例如，如果進場點是一個價格範圍，檢查當前價格是否在該範圍內
-        
-        # 簡單起見，我們假設如果策略評分高且信心水平高，就符合提醒條件
-        # 根據用戶設置的提醒方式發送通知
-        alerts_sent = False
+        # 檢查是否符合進場條件 - 簡單起見，我們假設如果策略評分高且信心水平高，就符合提醒條件
         
         # 檢查是否啟用提醒功能
         enable_alerts = st.session_state.get("enable_alerts", True)
         if not enable_alerts:
             return False
-            
-        # 獲取提醒方式
-        alert_method = st.session_state.get("alert_method", "電子郵件")
         
-        # 根據提醒方式發送不同類型的通知
-        if alert_method == "電子郵件":
-            # 發送電子郵件提醒
-            email_sent = send_email_alert(
+        # 檢查WhatsApp功能是否可用
+        if not WHATSAPP_AVAILABLE:
+            st.warning("檢測到高分策略，但WhatsApp功能未啟用。請正確設置WhatsApp環境變數。")
+            return False
+            
+        # 獲取WhatsApp設置
+        phone_number = st.session_state.get("whatsapp_phone", "")
+        
+        # 檢查是否有電話號碼
+        if not phone_number:
+            st.warning("檢測到高分策略，但缺少WhatsApp手機號碼設置。請在設置頁面配置WhatsApp手機號碼。")
+            return False
+        
+        try:    
+            # 格式化WhatsApp訊息
+            whatsapp_message = format_crypto_alert(
                 symbol=symbol,
                 timeframe=timeframe,
                 strategy_name=strategy_name.strip(),
@@ -3217,105 +3030,65 @@ def check_alert_conditions(strategy_text, symbol, timeframe, confidence):
                 stop_loss=stop_loss,
                 confidence=confidence
             )
-            if email_sent:
+            
+            # 發送WhatsApp提醒
+            whatsapp_sent = send_whatsapp_alert(phone_number, whatsapp_message)
+            if whatsapp_sent:
+                st.success(f"已成功發送WhatsApp提醒至 {phone_number}")
                 alerts_sent = True
-        
-        elif alert_method == "WhatsApp":
-            # 檢查WhatsApp功能是否可用
-            if not WHATSAPP_AVAILABLE:
-                st.warning("WhatsApp提醒功能已觸發，但WhatsApp模塊不可用。將嘗試使用電子郵件發送提醒。")
-                # 降級為電子郵件提醒
-                email_sent = send_email_alert(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    strategy_name=strategy_name.strip(),
-                    score=score,
-                    entry_point=entry_point,
-                    target_price=target_price,
-                    stop_loss=stop_loss,
-                    confidence=confidence
-                )
-                if email_sent:
-                    st.success("已降級使用電子郵件提醒並成功發送")
-                    alerts_sent = True
-                return alerts_sent
-                
-            # 獲取WhatsApp設置
-            phone_number = st.session_state.get("whatsapp_phone", "")
-            
-            # 檢查是否有電話號碼
-            if not phone_number:
-                st.warning("WhatsApp提醒功能已觸發，但缺少手機號碼設置。將嘗試使用電子郵件發送提醒。")
-                # 降級為電子郵件提醒
-                email_sent = send_email_alert(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    strategy_name=strategy_name.strip(),
-                    score=score,
-                    entry_point=entry_point,
-                    target_price=target_price,
-                    stop_loss=stop_loss,
-                    confidence=confidence
-                )
-                if email_sent:
-                    st.success("已降級使用電子郵件提醒並成功發送")
-                    alerts_sent = True
-                return alerts_sent
-            
-            try:    
-                # 格式化WhatsApp訊息
-                whatsapp_message = format_crypto_alert(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    strategy_name=strategy_name.strip(),
-                    score=score,
-                    entry_point=entry_point,
-                    target_price=target_price,
-                    stop_loss=stop_loss,
-                    confidence=confidence
-                )
-                
-                # 發送WhatsApp提醒
-                whatsapp_sent = send_whatsapp_alert(phone_number, whatsapp_message)
-                if whatsapp_sent:
-                    st.success(f"已成功發送WhatsApp提醒至 {phone_number}")
-                    alerts_sent = True
-                else:
-                    st.warning("WhatsApp發送失敗，將嘗試使用電子郵件發送提醒")
-                    # 降級為電子郵件提醒
-                    email_sent = send_email_alert(
-                        symbol=symbol,
-                        timeframe=timeframe,
-                        strategy_name=strategy_name.strip(),
-                        score=score,
-                        entry_point=entry_point,
-                        target_price=target_price,
-                        stop_loss=stop_loss,
-                        confidence=confidence
-                    )
-                    if email_sent:
-                        st.success("已降級使用電子郵件提醒並成功發送")
-                        alerts_sent = True
-            except Exception as e:
-                st.error(f"發送WhatsApp提醒時出錯: {str(e)}，將嘗試使用電子郵件發送提醒")
-                # 降級為電子郵件提醒
-                email_sent = send_email_alert(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    strategy_name=strategy_name.strip(),
-                    score=score,
-                    entry_point=entry_point,
-                    target_price=target_price,
-                    stop_loss=stop_loss,
-                    confidence=confidence
-                )
-                if email_sent:
-                    st.success("已降級使用電子郵件提醒並成功發送")
-                    alerts_sent = True
-        
-        elif alert_method == "網頁通知":
-            # 顯示網頁通知（暫不支持）
-            st.warning(f"檢測到高評分策略：{strategy_name} [{score}分]，但網頁通知功能尚未實現。")
-            alerts_sent = True
+            else:
+                st.error("WhatsApp提醒發送失敗。請檢查環境變數和連接設置。")
+        except Exception as e:
+            st.error(f"發送WhatsApp提醒時出錯: {str(e)}")
             
     return alerts_sent
+
+# 測試WhatsApp提醒功能
+def test_whatsapp_alert(phone_number):
+    """
+    發送測試WhatsApp，用於檢驗WhatsApp發送功能是否正常工作
+    
+    參數:
+    phone_number (str): 接收訊息的WhatsApp手機號碼
+    
+    返回:
+    bool: 是否成功發送訊息
+    """
+    try:
+        # 格式化測試訊息
+        message = format_crypto_alert(
+            symbol="BTC/USDT", 
+            timeframe="1h", 
+            strategy_name="測試策略", 
+            score=9.5, 
+            entry_point="當前價格附近", 
+            target_price="上漲5-8%", 
+            stop_loss="下跌2%處", 
+            confidence=0.85
+        )
+        
+        # 發送訊息
+        return send_whatsapp_alert(phone_number, message)
+    except Exception as e:
+        print(f"測試WhatsApp發送錯誤: {str(e)}")
+        return False
+
+# 處理 orjson 相關問題
+import plotly.io._json
+# 如果 orjson 存在，修復 OPT_NON_STR_KEYS 問題
+try:
+    import orjson
+    if not hasattr(orjson, 'OPT_NON_STR_KEYS'):
+        orjson.OPT_NON_STR_KEYS = 2  # 定義缺失的常量
+except ImportError:
+    pass
+except AttributeError:
+    # 修改 _json_to_plotly 方法，避免使用 OPT_NON_STR_KEYS
+    orig_to_json_plotly = plotly.io._json.to_json_plotly
+    def patched_to_json_plotly(fig_dict, *args, **kwargs):
+        try:
+            return orig_to_json_plotly(fig_dict, *args, **kwargs)
+        except AttributeError:
+            # 使用 json 而不是 orjson 進行序列化
+            return json.dumps(fig_dict)
+    plotly.io._json.to_json_plotly = patched_to_json_plotly
