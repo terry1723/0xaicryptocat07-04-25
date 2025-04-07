@@ -63,7 +63,14 @@ import plotly.graph_objects as go
 import requests
 import json
 from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from email.utils import formatdate
+
+# 導入APScheduler相關模塊
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 # 嘗試導入WhatsApp提醒模塊，如果失敗則設置為None
 try:
@@ -2860,6 +2867,49 @@ with tabs[3]:
                 except Exception as e:
                     st.error(f"發送測試WhatsApp時出錯: {str(e)}")
     
+    # 自動提醒設置區域
+    st.markdown("<h4>自動提醒設置</h4>", unsafe_allow_html=True)
+    st.info("自動提醒功能會定期對所選幣種進行分析，當發現高分交易策略時自動發送WhatsApp提醒。")
+    
+    # 顯示當前自動提醒狀態
+    is_running = st.session_state.get('auto_alert_running', False)
+    if is_running:
+        st.success("自動提醒功能已啟動！")
+        st.write(f"當前監控的幣種: {', '.join(st.session_state.get('auto_alert_symbols', []))}")
+        st.write(f"分析間隔: {st.session_state.get('auto_alert_interval', 60)}分鐘")
+    else:
+        st.warning("自動提醒功能未啟動")
+    
+    # 自動提醒設置
+    col1, col2 = st.columns(2)
+    with col1:
+        interval = st.slider("分析間隔（分鐘）", min_value=15, max_value=240, value=60, step=15, key="auto_interval")
+    with col2:
+        available_coins = ["BTC/USDT", "ETH/USDT", "BNB/USDT", "XRP/USDT", "SOL/USDT", "ADA/USDT", "DOGE/USDT", "SHIB/USDT", "AVAX/USDT", "DOT/USDT"]
+        selected_coins = st.multiselect("選擇要監控的幣種", available_coins, default=["BTC/USDT", "ETH/USDT"], key="auto_symbols")
+    
+    # 啟動和停止按鈕
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("啟動自動提醒", key="start_auto_alerts", disabled=not WHATSAPP_AVAILABLE or not st.session_state.get("whatsapp_phone", "")):
+            if not selected_coins:
+                st.error("請至少選擇一個要監控的幣種")
+            else:
+                success = start_auto_alerts(interval, selected_coins)
+                if success:
+                    st.success("自動提醒已啟動！系統將在後台定期分析所選幣種並發送提醒。")
+                    st.rerun()  # 刷新頁面
+                else:
+                    st.error("啟動自動提醒時出錯，請查看日誌")
+    with col2:
+        if st.button("停止自動提醒", key="stop_auto_alerts", disabled=not is_running):
+            success = stop_auto_alerts()
+            if success:
+                st.success("自動提醒已停止")
+                st.rerun()  # 刷新頁面
+            else:
+                st.error("停止自動提醒時出錯，請查看日誌")
+    
     st.markdown('</div>', unsafe_allow_html=True)
     
     # API 設置卡片
@@ -2891,22 +2941,28 @@ with tabs[3]:
     st.markdown("""
     **0xAI CryptoCat** 是一個使用多模型 AI 技術的加密貨幣分析工具，結合了技術分析和 AI 驅動的市場分析。
     
-    **版本**: v3.7.0 (WhatsApp專屬版)
+    **版本**: v3.8.0 (WhatsApp自動提醒版)
     
     **開發者**: Terry Lee
     
     **更新內容**:
+    - 添加自動提醒功能，定期監控多個幣種
+    - 自動檢測高分交易策略並發送WhatsApp通知
     - 精簡為WhatsApp專屬通知版本
-    - 移除電子郵件和網頁通知功能
     - 優化 Binance API 連接和重試機制
     - 增強價格合理性驗證
-    - 添加多交易所備選數據源
     
     **WhatsApp設置說明**:
     - 請確保已安裝Smithery MCP依賴(jlucaso1/whatsapp-mcp-ts)
     - 必須設置WHATSAPP_MCP_KEY環境變數
     - 必須設置WHATSAPP_SESSION_NAME環境變數
     - 在設置頁面中正確填寫手機號碼(含國家代碼)
+    
+    **自動提醒功能**:
+    - 可設置多個加密貨幣同時監控
+    - 支持15分鐘至4小時的分析間隔
+    - 系統會自動檢測評分8分以上的交易策略
+    - 所有提醒都會通過WhatsApp發送到您的手機
     
     **使用的 AI 模型**:
     - DeepSeek V3 (技術分析和整合分析)
@@ -2918,7 +2974,6 @@ with tabs[3]:
     - Smithery MCP API
     - CoinCap API
     - CoinGecko API (價格驗證)
-    - Kucoin、OKX、Bybit、Gate.io、Huobi (備選交易所)
     """)
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -3092,3 +3147,169 @@ except AttributeError:
             # 使用 json 而不是 orjson 進行序列化
             return json.dumps(fig_dict)
     plotly.io._json.to_json_plotly = patched_to_json_plotly
+
+# 創建全局調度器
+scheduler = BackgroundScheduler()
+
+# 全局變數，用於跟踪自動提醒設置
+if 'auto_alert_running' not in st.session_state:
+    st.session_state['auto_alert_running'] = False
+if 'auto_alert_symbols' not in st.session_state:
+    st.session_state['auto_alert_symbols'] = []
+if 'auto_alert_interval' not in st.session_state:
+    st.session_state['auto_alert_interval'] = 60  # 默認60分鐘
+
+# 自動分析函數，會被調度器定期調用
+def auto_analyze_job():
+    """自動分析指定的加密貨幣並發送提醒"""
+    try:
+        print(f"[{datetime.now()}] 執行自動分析任務...")
+        symbols = st.session_state.get('auto_alert_symbols', [])
+        
+        # 如果沒有指定任何幣種，返回
+        if not symbols:
+            print("沒有設置監控的幣種，跳過自動分析")
+            return
+            
+        # 對每個幣種執行分析
+        for symbol in symbols:
+            try:
+                print(f"分析 {symbol}...")
+                
+                # 獲取幣種數據
+                timeframe = '1h'  # 使用1小時時間框架
+                df = get_cryptocurrency_data(symbol, timeframe, 100)
+                
+                if df is None or len(df) < 20:
+                    print(f"無法獲取足夠的 {symbol} 數據，跳過")
+                    continue
+                
+                # 計算技術指標
+                indicators_df = calculate_all_indicators(df)
+                
+                # 獲取市場情緒
+                market_sentiment = get_market_sentiment(symbol)
+                
+                # 執行DeepSeek AI分析
+                analysis_result, confidence = analyze_with_deepseek(symbol, timeframe, df, indicators_df, market_sentiment)
+                
+                if analysis_result and confidence > 0:
+                    # 檢查是否達到提醒條件
+                    alerts_sent = check_alert_conditions(analysis_result, symbol, timeframe, confidence)
+                    
+                    if alerts_sent:
+                        print(f"已為 {symbol} 發送自動交易提醒")
+                    else:
+                        print(f"{symbol} 分析完成，但未觸發提醒條件")
+                else:
+                    print(f"{symbol} 分析失敗，無法獲取結果")
+                    
+                # 添加一些延遲，避免API調用過於頻繁
+                time.sleep(5)
+                
+            except Exception as e:
+                print(f"分析 {symbol} 時出錯: {str(e)}")
+                continue
+                
+        print(f"[{datetime.now()}] 自動分析任務完成")
+    except Exception as e:
+        print(f"自動分析任務執行出錯: {str(e)}")
+
+# 啟動自動提醒功能
+def start_auto_alerts(interval_minutes, symbols):
+    """
+    啟動自動提醒功能
+    
+    參數:
+    interval_minutes (int): 分析間隔（分鐘）
+    symbols (list): 要監控的加密貨幣列表
+    """
+    global scheduler
+    
+    try:
+        # 如果調度器已經在運行，先停止它
+        if scheduler.running:
+            scheduler.shutdown()
+            
+        # 創建新的調度器
+        scheduler = BackgroundScheduler()
+        
+        # 更新會話狀態
+        st.session_state['auto_alert_running'] = True
+        st.session_state['auto_alert_symbols'] = symbols
+        st.session_state['auto_alert_interval'] = interval_minutes
+        
+        # 添加定時任務
+        scheduler.add_job(
+            auto_analyze_job,
+            IntervalTrigger(minutes=interval_minutes),
+            id='auto_analyze_job',
+            replace_existing=True
+        )
+        
+        # 啟動調度器
+        scheduler.start()
+        
+        # 立即執行一次分析
+        auto_analyze_job()
+        
+        return True
+    except Exception as e:
+        print(f"啟動自動提醒時出錯: {str(e)}")
+        return False
+
+# 停止自動提醒功能
+def stop_auto_alerts():
+    """停止自動提醒功能"""
+    global scheduler
+    
+    try:
+        # 停止調度器
+        if scheduler.running:
+            scheduler.shutdown()
+            
+        # 更新會話狀態
+        st.session_state['auto_alert_running'] = False
+        
+        return True
+    except Exception as e:
+        print(f"停止自動提醒時出錯: {str(e)}")
+        return False
+
+# 在應用程序啟動時自動恢復自動提醒設置
+def auto_restart_auto_alerts():
+    """在應用程序啟動時嘗試恢復之前的自動提醒設置"""
+    try:
+        if st.session_state.get('auto_alert_running', False):
+            symbols = st.session_state.get('auto_alert_symbols', [])
+            interval = st.session_state.get('auto_alert_interval', 60)
+            
+            if symbols and WHATSAPP_AVAILABLE and st.session_state.get("whatsapp_phone", ""):
+                # 啟動自動提醒
+                print(f"恢復自動提醒設置: 間隔={interval}分鐘, 幣種={symbols}")
+                start_auto_alerts(interval, symbols)
+            else:
+                # 如果缺少必要條件，重置自動提醒狀態
+                st.session_state['auto_alert_running'] = False
+    except Exception as e:
+        print(f"恢復自動提醒設置時出錯: {str(e)}")
+        st.session_state['auto_alert_running'] = False
+
+# 在應用程序關閉時停止調度器
+import atexit
+
+def on_shutdown():
+    """在應用程序關閉時停止調度器"""
+    try:
+        global scheduler
+        if scheduler and scheduler.running:
+            print("應用程序關閉，停止調度器...")
+            scheduler.shutdown()
+    except Exception as e:
+        print(f"停止調度器時出錯: {str(e)}")
+
+# 註冊關閉事件處理器
+atexit.register(on_shutdown)
+
+# 嘗試恢復自動提醒設置
+auto_restart_auto_alerts()
