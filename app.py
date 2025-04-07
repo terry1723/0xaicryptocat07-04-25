@@ -10,6 +10,30 @@
 4. CoinCap API
 """
 
+import os
+from pathlib import Path
+
+# 檢測部署環境並自動創建空的secrets.toml檔案
+if os.path.exists('/app'):  # 檢測Zeabur或類似的容器環境
+    # 檢查是否已存在secrets.toml
+    if not os.path.exists('/app/.streamlit/secrets.toml'):
+        try:
+            # 確保目錄存在
+            Path('/app/.streamlit').mkdir(parents=True, exist_ok=True)
+            # 創建基本的secrets.toml檔案
+            with open('/app/.streamlit/secrets.toml', 'w') as f:
+                f.write('[api_keys]\n')  # 建立空的API密鑰部分
+                # 添加默認的空值避免報錯
+                f.write('CRYPTOAPIS_KEY = ""\n')
+                f.write('BINANCE_API_KEY = ""\n')
+                f.write('BINANCE_API_SECRET = ""\n')
+                f.write('DEEPSEEK_API_KEY = ""\n')
+                f.write('COINMARKETCAP_API_KEY = ""\n')
+                f.write('OPENAI_API_KEY = ""\n')
+            print("已在容器環境中創建臨時secrets.toml檔案")
+        except Exception as e:
+            print(f"創建secrets.toml時出錯: {str(e)}")
+
 import streamlit as st
 
 # 設置頁面配置 - 這必須是第一個st命令
@@ -30,7 +54,6 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import requests
 import json
-import os
 from dotenv import load_dotenv
 
 # 加載環境變數
@@ -58,22 +81,30 @@ except AttributeError:
 
 # 安全地從 secrets 或環境變量獲取 API 密鑰
 def get_api_key(key_name, default_value=None):
-    """安全地獲取 API 密鑰，優先從 Streamlit secrets 獲取，然後是環境變量，最後是默認值"""
-    try:
-        if key_name in st.secrets:
-            return st.secrets[key_name]
-    except Exception:
-        # 忽略 secrets 相關錯誤
-        print(f"注意: 無法從Streamlit Secrets獲取{key_name}，嘗試從環境變數獲取")
-        pass
-        
-    # 如果無法從 secrets 獲取，嘗試從環境變量獲取，最後使用默認值
-    value = os.getenv(key_name, default_value)
+    """安全地獲取 API 密鑰，優先從環境變量獲取，然後是Streamlit secrets，最後是默認值"""
+    # 靜態變數用於追蹤是否已經警告過secrets缺失，避免重複警告
+    if not hasattr(get_api_key, 'warned_missing_secrets'):
+        get_api_key.warned_missing_secrets = False
+    
+    # 優先從環境變數獲取
+    value = os.getenv(key_name)
     if value:
-        print(f"成功從環境變數獲取{key_name}")
-    else:
-        print(f"警告: 無法獲取{key_name}，使用默認值")
-    return value
+        return value
+    
+    # 嘗試從secrets獲取，但不重複警告
+    if not get_api_key.warned_missing_secrets:
+        try:
+            if hasattr(st, 'secrets') and key_name in st.secrets:
+                return st.secrets[key_name]
+        except Exception as e:
+            # 只提示一次secrets缺失
+            print("注意: 未找到secrets檔案，將使用環境變數或默認值")
+            get_api_key.warned_missing_secrets = True
+    
+    # 如果都沒有，使用默認值
+    if default_value:
+        print(f"使用默認值作為{key_name}")
+    return default_value
 
 # 從Streamlit secrets或環境變數讀取API密鑰
 CRYPTOAPIS_KEY = get_api_key('CRYPTOAPIS_KEY', '56af1c06ebd5a7602a660516e0d044489c307860')
