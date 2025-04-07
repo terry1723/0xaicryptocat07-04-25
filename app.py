@@ -93,17 +93,46 @@ except Exception as e:
 
 # 無論出於什麼原因WhatsApp不可用，都確保有替代函數
 if not WHATSAPP_AVAILABLE:
-    # 創建空函數作為替代，防止調用出錯
-    def send_whatsapp_alert(*args, **kwargs): 
-        print("WhatsApp提醒功能不可用，無法發送提醒")
-        return False
-    def format_crypto_alert(*args, **kwargs): 
-        return "WhatsApp提醒功能不可用"
-    def test_whatsapp_alert(*args, **kwargs): 
-        print("WhatsApp提醒功能不可用，無法發送測試訊息")
-        return False
-    def check_whatsapp_connection(*args, **kwargs): 
-        return {"status": "error", "message": "WhatsApp模塊未安裝或配置不正確"}
+    # 創建模擬函數，用於測試流程
+    def send_whatsapp_alert(phone_number, message): 
+        """WhatsApp模擬器：將消息打印到控制台而不是發送到真實WhatsApp"""
+        print(f"\n--- WhatsApp模擬器 ---")
+        print(f"接收者: {phone_number}")
+        print(f"消息內容:\n{message}")
+        print("----------------------\n")
+        # 返回True表示發送成功
+        return True
+    
+    def format_crypto_alert(symbol, timeframe, strategy_name, score, entry_point, target_price, stop_loss, confidence): 
+        """格式化加密貨幣提醒消息"""
+        return f"""
+*0xAI CryptoCat 交易提醒*
+
+檢測到 *{symbol}* 在 *{timeframe}* 時間框架上出現高評分交易機會：
+
+策略: {strategy_name} [*{score}分*]
+
+進場點: {entry_point}
+目標價: {target_price}
+止損位: {stop_loss}
+
+信心水平: {confidence*100:.1f}%
+
+請登入0xAI CryptoCat平台查看完整分析：
+https://0xaicryptocat.zeabur.app
+"""
+    
+    def test_whatsapp_alert(phone_number): 
+        """發送測試WhatsApp，實際上只打印到控制台"""
+        print(f"\n--- WhatsApp測試模擬器 ---")
+        print(f"測試消息發送至 {phone_number}")
+        print("成功模擬WhatsApp發送")
+        print("--------------------------\n")
+        return True
+    
+    def check_whatsapp_connection(): 
+        """模擬檢查WhatsApp連接"""
+        return {"status": "connected", "message": "使用模擬器模式"}
 
 # 加載環境變數
 load_dotenv()
@@ -2828,11 +2857,14 @@ with tabs[3]:
     
     # WhatsApp設置
     if not WHATSAPP_AVAILABLE:
-        st.warning("WhatsApp功能未啟用。請確保已正確設置環境變數。")
-        st.info("要使用WhatsApp功能，請確保：\n1. 已安裝Smithery MCP依賴\n2. 已設置WHATSAPP_MCP_KEY環境變數\n3. 已設置WHATSAPP_SESSION_NAME環境變數")
+        st.warning("WhatsApp API無法連接，系統將使用WhatsApp模擬器進行測試。")
+        st.info("在模擬器模式下，消息會顯示在服務器控制台而不是發送到實際WhatsApp。")
         
-        # 顯示手機號碼輸入框，但添加禁用提示
-        st.text_input("WhatsApp手機號碼 (當前不可用)", value="", disabled=True, key="whatsapp_phone_disabled")
+        # 在模擬模式下仍可輸入手機號碼
+        st.text_input("WhatsApp手機號碼 (模擬模式)", value="+85295584880", key="whatsapp_phone")
+        
+        # 顯示模擬器狀態
+        st.success("WhatsApp模擬器已啟用")
     else:
         # WhatsApp手機號碼設置
         st.text_input("WhatsApp手機號碼 (包含國家代碼，如852XXXXXXXX)", value="", key="whatsapp_phone")
@@ -2844,28 +2876,31 @@ with tabs[3]:
         else:
             st.warning(f"WhatsApp連接狀態: 未連接 ({whatsapp_status.get('message', '未知錯誤')})")
             st.info("請確保Zeabur環境變數中設置了WHATSAPP_MCP_KEY和WHATSAPP_SESSION_NAME")
-        
-        # 保存和測試按鈕
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("保存提醒設置", key="save_whatsapp_settings"):
-                st.success("WhatsApp設置已保存")
-        with col2:
-            if st.button("發送測試WhatsApp", key="send_test_whatsapp"):
-                try:
-                    # 獲取手機號碼
-                    phone_number = st.session_state.get("whatsapp_phone", "")
-                    if not phone_number:
-                        st.error("請先輸入有效的WhatsApp手機號碼")
-                    else:
-                        # 發送測試WhatsApp
-                        test_result = test_whatsapp_alert(phone_number)
-                        if test_result:
-                            st.success(f"測試WhatsApp發送成功！請檢查 {phone_number} 的手機。")
+    
+    # 保存和測試按鈕
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("保存提醒設置", key="save_whatsapp_settings"):
+            st.success("WhatsApp設置已保存")
+    with col2:
+        if st.button("發送測試WhatsApp", key="send_test_whatsapp"):
+            try:
+                # 獲取手機號碼
+                phone_number = st.session_state.get("whatsapp_phone", "")
+                if not phone_number:
+                    st.error("請先輸入有效的WhatsApp手機號碼")
+                else:
+                    # 發送測試WhatsApp
+                    test_result = test_whatsapp_alert(phone_number)
+                    if test_result:
+                        if not WHATSAPP_AVAILABLE:
+                            st.success(f"測試成功！模擬消息已發送至 {phone_number}（顯示在服務器控制台）")
                         else:
-                            st.error("WhatsApp發送失敗。請確認手機號碼和環境變數設置是否正確。")
-                except Exception as e:
-                    st.error(f"發送測試WhatsApp時出錯: {str(e)}")
+                            st.success(f"測試WhatsApp發送成功！請檢查 {phone_number} 的手機。")
+                    else:
+                        st.error("WhatsApp發送失敗。請確認手機號碼和環境變數設置是否正確。")
+            except Exception as e:
+                st.error(f"發送測試WhatsApp時出錯: {str(e)}")
     
     # 自動提醒設置區域
     st.markdown("<h4>自動提醒設置</h4>", unsafe_allow_html=True)
@@ -2891,13 +2926,17 @@ with tabs[3]:
     # 啟動和停止按鈕
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("啟動自動提醒", key="start_auto_alerts", disabled=not WHATSAPP_AVAILABLE or not st.session_state.get("whatsapp_phone", "")):
+        # 在模擬模式下不禁用啟動按鈕
+        if st.button("啟動自動提醒", key="start_auto_alerts", disabled=not st.session_state.get("whatsapp_phone", "")):
             if not selected_coins:
                 st.error("請至少選擇一個要監控的幣種")
             else:
                 success = start_auto_alerts(interval, selected_coins)
                 if success:
-                    st.success("自動提醒已啟動！系統將在後台定期分析所選幣種並發送提醒。")
+                    if not WHATSAPP_AVAILABLE:
+                        st.success("自動提醒已啟動！系統將使用模擬器在後台定期分析所選幣種。")
+                    else:
+                        st.success("自動提醒已啟動！系統將在後台定期分析所選幣種並發送提醒。")
                     st.rerun()  # 刷新頁面
                 else:
                     st.error("啟動自動提醒時出錯，請查看日誌")
@@ -2941,28 +2980,27 @@ with tabs[3]:
     st.markdown("""
     **0xAI CryptoCat** 是一個使用多模型 AI 技術的加密貨幣分析工具，結合了技術分析和 AI 驅動的市場分析。
     
-    **版本**: v3.8.0 (WhatsApp自動提醒版)
+    **版本**: v3.8.1 (WhatsApp模擬器版)
     
     **開發者**: Terry Lee
     
     **更新內容**:
+    - 添加WhatsApp模擬器，無需實際API也能測試功能
     - 添加自動提醒功能，定期監控多個幣種
-    - 自動檢測高分交易策略並發送WhatsApp通知
-    - 精簡為WhatsApp專屬通知版本
+    - 自動檢測高分交易策略並發送通知
     - 優化 Binance API 連接和重試機制
     - 增強價格合理性驗證
     
     **WhatsApp設置說明**:
-    - 請確保已安裝Smithery MCP依賴(jlucaso1/whatsapp-mcp-ts)
-    - 必須設置WHATSAPP_MCP_KEY環境變數
-    - 必須設置WHATSAPP_SESSION_NAME環境變數
-    - 在設置頁面中正確填寫手機號碼(含國家代碼)
+    - 支持真實WhatsApp API或模擬器模式
+    - 模擬器模式下消息顯示在服務器控制台
+    - 填寫手機號碼格式如: +85295584880
     
     **自動提醒功能**:
     - 可設置多個加密貨幣同時監控
     - 支持15分鐘至4小時的分析間隔
     - 系統會自動檢測評分8分以上的交易策略
-    - 所有提醒都會通過WhatsApp發送到您的手機
+    - 所有提醒都會通過WhatsApp或模擬器發送
     
     **使用的 AI 模型**:
     - DeepSeek V3 (技術分析和整合分析)
@@ -2971,7 +3009,6 @@ with tabs[3]:
     **數據來源**:
     - Binance API (主要數據源)
     - Crypto APIs
-    - Smithery MCP API
     - CoinCap API
     - CoinGecko API (價格驗證)
     """)
