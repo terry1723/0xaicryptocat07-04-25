@@ -26,10 +26,35 @@ from dotenv import load_dotenv
 # 加載環境變數
 load_dotenv()
 
-# 從環境變數獲取API密鑰
-CRYPTOAPIS_KEY = os.getenv('CRYPTOAPIS_KEY', '56af1c06ebd5a7602a660516e0d044489c307860')
-BINANCE_API_KEY = os.getenv('BINANCE_API_KEY', '')  # 默認為空字符串，避免硬編碼密鑰
-BINANCE_API_SECRET = os.getenv('BINANCE_API_SECRET', '')  # 默認為空字符串，避免硬編碼密鑰
+# 安全地從 secrets 或環境變量獲取 API 密鑰
+def get_api_key(key_name, default_value=None):
+    """安全地獲取 API 密鑰，優先從 Streamlit secrets 獲取，然後是環境變量，最後是默認值"""
+    try:
+        if key_name in st.secrets:
+            return st.secrets[key_name]
+    except Exception:
+        # 忽略 secrets 相關錯誤
+        print(f"注意: 無法從Streamlit Secrets獲取{key_name}，嘗試從環境變數獲取")
+        pass
+        
+    # 如果無法從 secrets 獲取，嘗試從環境變量獲取，最後使用默認值
+    value = os.getenv(key_name, default_value)
+    if value:
+        print(f"成功從環境變數獲取{key_name}")
+    else:
+        print(f"警告: 無法獲取{key_name}，使用默認值")
+    return value
+
+# 從Streamlit secrets或環境變數讀取API密鑰
+CRYPTOAPIS_KEY = get_api_key('CRYPTOAPIS_KEY', '56af1c06ebd5a7602a660516e0d044489c307860')
+BINANCE_API_KEY = get_api_key('BINANCE_API_KEY', '')  # 默認為空字符串，避免硬編碼密鑰
+BINANCE_API_SECRET = get_api_key('BINANCE_API_SECRET', '')  # 默認為空字符串，避免硬編碼密鑰
+DEEPSEEK_API_KEY = get_api_key("DEEPSEEK_API_KEY", "sk-6ae04d6789f94178b4053d2c42650b6c")
+COINMARKETCAP_API_KEY = get_api_key("COINMARKETCAP_API_KEY", "b54bcf4d-1bca-4e8e-9a24-22ff2c3d462c")
+OPENAI_API_KEY = get_api_key("OPENAI_API_KEY", "")
+
+# 設置 Bitget MCP 服務器
+BITGET_MCP_SERVER = "http://localhost:3000"
 
 # 設置頁面配置
 st.set_page_config(
@@ -209,29 +234,11 @@ except AttributeError:
     plotly.io._json.to_json_plotly = patched_to_json_plotly
 
 # 安全地從 secrets 或環境變量獲取 API 密鑰
-def get_api_key(key_name, default_value=None):
-    """安全地獲取 API 密鑰，優先從 Streamlit secrets 獲取，然後是環境變量，最後是默認值"""
-    try:
-        if key_name in st.secrets:
-            return st.secrets[key_name]
-    except Exception:
-        # 忽略 secrets 相關錯誤
-        pass
-        
-    # 如果無法從 secrets 獲取，嘗試從環境變量獲取，最後使用默認值
     return os.getenv(key_name, default_value)
 
 # 從Streamlit secrets或環境變數讀取API密鑰，如果都不存在則使用預設值
-DEEPSEEK_API_KEY = get_api_key("DEEPSEEK_API_KEY", "sk-6ae04d6789f94178b4053d2c42650b6c")
-
-# 設置 CoinMarketCap API 密鑰
-COINMARKETCAP_API_KEY = get_api_key("COINMARKETCAP_API_KEY", "b54bcf4d-1bca-4e8e-9a24-22ff2c3d462c")
-
-# 新增：設置 OpenAI API 密鑰
-OPENAI_API_KEY = get_api_key("OPENAI_API_KEY", "")
 
 # 設置 Bitget MCP 服務器
-BITGET_MCP_SERVER = "http://localhost:3000"
 
 # DexScreener API函數，獲取加密貨幣數據
 def get_dexscreener_data(symbol, timeframe, limit=100):
