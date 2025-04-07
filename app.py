@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-加密貨幣分析工具 v3.5.0
-更新內容: 優化Binance API連接和數據可靠性，改進用戶界面
+加密貨幣分析工具 v3.6.0
+更新內容: 添加WhatsApp通知功能，優化Binance API連接和數據可靠性，改進用戶界面
 數據獲取優先順序:
 1. Binance API (主要數據源)
 2. Crypto APIs (備用數據源)
@@ -30,6 +30,8 @@ if os.path.exists('/app'):  # 檢測Zeabur或類似的容器環境
                 f.write('DEEPSEEK_API_KEY = ""\n')
                 f.write('COINMARKETCAP_API_KEY = ""\n')
                 f.write('OPENAI_API_KEY = ""\n')
+                f.write('WHATSAPP_MCP_KEY = ""\n')
+                f.write('WHATSAPP_SESSION_NAME = "0xAICryptoCat"\n')
             print("已在容器環境中創建臨時secrets.toml檔案")
         except Exception as e:
             print(f"創建secrets.toml時出錯: {str(e)}")
@@ -65,6 +67,9 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formatdate
+
+# 導入WhatsApp提醒模塊
+from whatsapp_alert import send_whatsapp_alert, format_crypto_alert, test_whatsapp_alert, check_whatsapp_connection
 
 # 加載環境變數
 load_dotenv()
@@ -1921,7 +1926,7 @@ def get_claude_analysis(symbol, timeframe, smc_results, snr_results):
 st.markdown("""
 <div style="text-align: center; padding: 20px 0;">
     <h1>0xAI CryptoCat 加密貨幣分析儀表板</h1>
-    <h2 style="font-size: 1.2rem; color: #9C27B0;">v3.5.0 - Binance API 增強版</h2>
+    <h2 style="font-size: 1.2rem; color: #9C27B0;">v3.6.0 - Binance API 增強版</h2>
     <p>多模型AI驅動的加密貨幣技術與市場情緒分析 - 使用Binance、Crypto APIs和多種備選數據源</p>
 </div>
 """, unsafe_allow_html=True)
@@ -2821,7 +2826,7 @@ with tabs[3]:
     enable_alerts = st.checkbox("啟用交易提醒", value=True, key="enable_alerts")
     
     # 提醒方式
-    alert_method = st.radio("提醒方式", ["電子郵件", "網頁通知"], index=0, key="alert_method")
+    alert_method = st.radio("提醒方式", ["電子郵件", "WhatsApp", "網頁通知"], index=0, key="alert_method")
     
     # 提醒觸發條件
     st.slider("最低策略評分觸發閾值", min_value=1, max_value=10, value=8, key="score_threshold")
@@ -2831,22 +2836,64 @@ with tabs[3]:
     if alert_method == "電子郵件":
         test_email = st.text_input("電子郵件地址", value="terry172323@gmail.com", key="email_input")
     
-    # 保存提醒設置
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("保存提醒設置", key="save_alert_settings"):
-            st.success("提醒設置已保存")
-    with col2:
-        if st.button("發送測試郵件", key="send_test_email"):
-            try:
-                # 發送測試提醒
-                test_result = test_email_alert()
-                if test_result:
-                    st.success("測試郵件發送成功！請檢查您的郵箱。")
-                else:
-                    st.error("測試郵件發送失敗。請確認環境變數設置是否正確。")
-            except Exception as e:
-                st.error(f"發送測試郵件時出錯: {str(e)}")
+        # 保存提醒設置
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("保存提醒設置", key="save_alert_settings"):
+                st.success("提醒設置已保存")
+        with col2:
+            if st.button("發送測試郵件", key="send_test_email"):
+                try:
+                    # 發送測試提醒
+                    test_result = test_email_alert()
+                    if test_result:
+                        st.success("測試郵件發送成功！請檢查您的郵箱。")
+                    else:
+                        st.error("測試郵件發送失敗。請確認環境變數設置是否正確。")
+                except Exception as e:
+                    st.error(f"發送測試郵件時出錯: {str(e)}")
+    
+    # WhatsApp設置
+    elif alert_method == "WhatsApp":
+        # WhatsApp手機號碼設置
+        st.text_input("WhatsApp手機號碼 (包含國家代碼，如852XXXXXXXX)", value="", key="whatsapp_phone")
+        
+        # 顯示WhatsApp MCP連接狀態
+        whatsapp_status = check_whatsapp_connection()
+        if whatsapp_status.get("status") == "connected":
+            st.success("WhatsApp連接狀態: 已連接")
+        else:
+            st.warning(f"WhatsApp連接狀態: 未連接 ({whatsapp_status.get('message', '未知錯誤')})")
+            st.info("請確保Zeabur環境變數中設置了WHATSAPP_MCP_KEY和WHATSAPP_SESSION_NAME")
+        
+        # 保存和測試按鈕
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("保存提醒設置", key="save_whatsapp_settings"):
+                st.success("WhatsApp設置已保存")
+        with col2:
+            if st.button("發送測試WhatsApp", key="send_test_whatsapp"):
+                try:
+                    # 獲取手機號碼
+                    phone_number = st.session_state.get("whatsapp_phone", "")
+                    if not phone_number:
+                        st.error("請先輸入有效的WhatsApp手機號碼")
+                    else:
+                        # 發送測試WhatsApp
+                        test_result = test_whatsapp_alert(phone_number)
+                        if test_result:
+                            st.success(f"測試WhatsApp發送成功！請檢查 {phone_number} 的手機。")
+                        else:
+                            st.error("WhatsApp發送失敗。請確認手機號碼和環境變數設置是否正確。")
+                except Exception as e:
+                    st.error(f"發送測試WhatsApp時出錯: {str(e)}")
+                    
+    # 網頁通知設置
+    elif alert_method == "網頁通知":
+        st.info("網頁通知功能僅在瀏覽器中有效，需要允許通知權限。")
+        
+        if st.button("保存提醒設置", key="save_webnotif_settings"):
+            st.success("網頁通知設置已保存")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -2863,6 +2910,9 @@ with tabs[3]:
     # CoinMarketCap API 設置
     cmc_key = st.text_input("CoinMarketCap API 密鑰", type="password", value="*" * 10 if COINMARKETCAP_API_KEY else "", key="cmc_api_key")
     
+    # WhatsApp MCP API 設置
+    whatsapp_key = st.text_input("WhatsApp MCP API 密鑰", type="password", value="*" * 10 if os.getenv("WHATSAPP_MCP_KEY") else "", key="whatsapp_mcp_key")
+    
     # 保存按鈕
     st.button("保存設置", key="save_api_settings")
     
@@ -2875,11 +2925,12 @@ with tabs[3]:
     st.markdown("""
     **0xAI CryptoCat** 是一個使用多模型 AI 技術的加密貨幣分析工具，結合了技術分析和 AI 驅動的市場分析。
     
-    **版本**: v3.5.0 (Binance API 增強版)
+    **版本**: v3.6.0 (WhatsApp通知版)
     
     **開發者**: Terry Lee
     
     **更新內容**:
+    - 添加WhatsApp通知功能 (via jlucaso1/whatsapp-mcp-ts)
     - 優化 Binance API 連接和重試機制
     - 增強價格合理性驗證
     - 添加多交易所備選數據源
@@ -3082,16 +3133,62 @@ def check_alert_conditions(strategy_text, symbol, timeframe, confidence):
         # 例如，如果進場點是一個價格範圍，檢查當前價格是否在該範圍內
         
         # 簡單起見，我們假設如果策略評分高且信心水平高，就符合提醒條件
-        sent = send_email_alert(
-            symbol=symbol,
-            timeframe=timeframe,
-            strategy_name=strategy_name.strip(),
-            score=score,
-            entry_point=entry_point,
-            target_price=target_price,
-            stop_loss=stop_loss,
-            confidence=confidence
-        )
+        # 根據用戶設置的提醒方式發送通知
+        alerts_sent = False
         
-        if sent:
+        # 檢查是否啟用提醒功能
+        enable_alerts = st.session_state.get("enable_alerts", True)
+        if not enable_alerts:
+            return False
+            
+        # 獲取提醒方式
+        alert_method = st.session_state.get("alert_method", "電子郵件")
+        
+        # 根據提醒方式發送不同類型的通知
+        if alert_method == "電子郵件":
+            # 發送電子郵件提醒
+            email_sent = send_email_alert(
+                symbol=symbol,
+                timeframe=timeframe,
+                strategy_name=strategy_name.strip(),
+                score=score,
+                entry_point=entry_point,
+                target_price=target_price,
+                stop_loss=stop_loss,
+                confidence=confidence
+            )
+            if email_sent:
+                alerts_sent = True
+        
+        elif alert_method == "WhatsApp":
+            # 獲取WhatsApp設置
+            phone_number = st.session_state.get("whatsapp_phone", "")
+            
+            # 檢查是否有電話號碼
+            if not phone_number:
+                st.warning("WhatsApp提醒功能已觸發，但缺少手機號碼設置。請在設置頁面配置WhatsApp手機號碼。")
+                return False
+                
+            # 格式化WhatsApp訊息
+            whatsapp_message = format_crypto_alert(
+                symbol=symbol,
+                timeframe=timeframe,
+                strategy_name=strategy_name.strip(),
+                score=score,
+                entry_point=entry_point,
+                target_price=target_price,
+                stop_loss=stop_loss,
+                confidence=confidence
+            )
+            
+            # 發送WhatsApp提醒
+            whatsapp_sent = send_whatsapp_alert(phone_number, whatsapp_message)
+            if whatsapp_sent:
+                alerts_sent = True
+                
+        elif alert_method == "網頁通知":
+            # 顯示網頁通知（暫不支持）
+            st.warning(f"檢測到高評分策略：{strategy_name} [{score}分]，但網頁通知功能尚未實現。")
             alerts_sent = True
+            
+    return alerts_sent
