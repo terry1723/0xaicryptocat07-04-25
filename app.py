@@ -1790,7 +1790,11 @@ tabs = st.tabs(["📈 技術分析", "🧠 AI 分析", "📊 市場數據", "⚙
 
 with tabs[0]:
     # 技術分析標籤內容
-    st.markdown("<h2>技術分析儀表板</h2>", unsafe_allow_html=True)
+    st.markdown("<h2>SPX技術分析儀表板</h2>", unsafe_allow_html=True)
+    
+    # 固定為SPX分析
+    st.info("本工具專門分析標準普爾500指數(SPX)")
+    selected_symbol = "SPX"
     
     # 使用列布局安排控制元素
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
@@ -1930,8 +1934,8 @@ with tabs[0]:
                     st.plotly_chart(volume_fig, use_container_width=True)
                 
                 # 進行真實技術分析
-                smc_data = smc_analysis(df)
-                snr_data = snr_analysis(df)
+                smc_results = smc_analysis(df)
+                snr_results = snr_analysis(df)
             else:
                 st.error(f"無法獲取 {selected_symbol} 的數據，請稍後再試或選擇其他幣種。")
     else:
@@ -1953,27 +1957,27 @@ with tabs[0]:
             # 使用真實SMC分析數據
             # 顯示主要信息
             st.markdown(f"""
-            <div class="highlight-metric">市場結構: {"看漲" if smc_data["market_structure"] == "bullish" else "看跌"}</div>
-            <div class="highlight-metric">趨勢強度: {smc_data["trend_strength"]:.2f}</div>
-            <div class="highlight-metric">當前價格: ${smc_data["price"]:.2f}</div>
+            <div class="highlight-metric">市場結構: {"看漲" if smc_results["market_structure"] == "bullish" else "看跌"}</div>
+            <div class="highlight-metric">趨勢強度: {smc_results["trend_strength"]:.2f}</div>
+            <div class="highlight-metric">當前價格: ${smc_results["price"]:.2f}</div>
             """, unsafe_allow_html=True)
             
             # 使用可折疊部分顯示更多細節
             with st.expander("查看詳細 SMC 分析"):
                 st.markdown(f"""
-                **支撐位**: ${smc_data["support_level"]:.2f}  
-                **阻力位**: ${smc_data["resistance_level"]:.2f}  
-                **SMC 建議**: {"買入" if smc_data["recommendation"] == "buy" else "賣出" if smc_data["recommendation"] == "sell" else "觀望"}
+                **支撐位**: ${smc_results["support_level"]:.2f}  
+                **阻力位**: ${smc_results["resistance_level"]:.2f}  
+                **SMC 建議**: {"買入" if smc_results["recommendation"] == "buy" else "賣出" if smc_results["recommendation"] == "sell" else "觀望"}
                 
                 **重要價格水平**:
-                - 當前價格: ${smc_data["price"]:.2f}
-                - 關鍵支撐: ${smc_data["key_support"]:.2f}
-                - 關鍵阻力: ${smc_data["key_resistance"]:.2f}
+                - 當前價格: ${smc_results["price"]:.2f}
+                - 關鍵支撐: ${smc_results["key_support"]:.2f}
+                - 關鍵阻力: ${smc_results["key_resistance"]:.2f}
                 
                 **趨勢信息**:
-                - 市場結構: {"看漲" if smc_data["market_structure"] == "bullish" else "看跌"}
-                - 趨勢強度: {smc_data["trend_strength"]:.2f}
-                - 趨勢持續性: {"高" if smc_data["trend_strength"] > 0.7 else "中等" if smc_data["trend_strength"] > 0.4 else "低"}
+                - 市場結構: {"看漲" if smc_results["market_structure"] == "bullish" else "看跌"}
+                - 趨勢強度: {smc_results["trend_strength"]:.2f}
+                - 趨勢持續性: {"高" if smc_results["trend_strength"] > 0.7 else "中等" if smc_results["trend_strength"] > 0.4 else "低"}
                 """)
                 
             st.markdown('</div>', unsafe_allow_html=True)
@@ -1985,28 +1989,28 @@ with tabs[0]:
             
             # 使用真實SNR分析數據
             # 顯示主要信息
-            rsi_state = "超買" if snr_data["overbought"] else "超賣" if snr_data["oversold"] else "中性"
+            rsi_state = "超買" if snr_results["overbought"] else "超賣" if snr_results["oversold"] else "中性"
             st.markdown(f"""
-            <div class="highlight-metric">RSI: {snr_data["rsi"]:.2f} ({rsi_state})</div>
-            <div class="highlight-metric">近期支撐位: ${snr_data["near_support"]:.2f}</div>
-            <div class="highlight-metric">近期阻力位: ${snr_data["near_resistance"]:.2f}</div>
+            <div class="highlight-metric">RSI: {snr_results["rsi"]:.2f} ({rsi_state})</div>
+            <div class="highlight-metric">近期支撐位: ${snr_results["near_support"]:.2f}</div>
+            <div class="highlight-metric">近期阻力位: ${snr_results["near_resistance"]:.2f}</div>
             """, unsafe_allow_html=True)
             
             # 使用可折疊部分顯示更多細節
             with st.expander("查看詳細 SNR 分析"):
                 st.markdown(f"""
-                **強支撐位**: ${snr_data["strong_support"]:.2f}  
-                **強阻力位**: ${snr_data["strong_resistance"]:.2f}  
-                **SNR 建議**: {"買入" if snr_data["recommendation"] == "buy" else "賣出" if snr_data["recommendation"] == "sell" else "觀望"}
+                **強支撐位**: ${snr_results["strong_support"]:.2f}  
+                **強阻力位**: ${snr_results["strong_resistance"]:.2f}  
+                **SNR 建議**: {"買入" if snr_results["recommendation"] == "buy" else "賣出" if snr_results["recommendation"] == "sell" else "觀望"}
                 
                 **技術指標**:
-                - RSI ({selected_timeframe}): {snr_data["rsi"]:.2f}
-                - 狀態: {"超買" if snr_data["overbought"] else "超賣" if snr_data["oversold"] else "中性"}
-                - 動能方向: {"上升" if snr_data.get("momentum_up", False) else "下降" if snr_data.get("momentum_down", False) else "中性"}
+                - RSI ({selected_timeframe}): {snr_results["rsi"]:.2f}
+                - 狀態: {"超買" if snr_results["overbought"] else "超賣" if snr_results["oversold"] else "中性"}
+                - 動能方向: {"上升" if snr_results.get("momentum_up", False) else "下降" if snr_results.get("momentum_down", False) else "中性"}
                 
                 **供需區域**:
-                - 主要供應區: ${snr_data["strong_resistance"]:.2f} 到 ${snr_data["near_resistance"]:.2f}
-                - 主要需求區: ${snr_data["near_support"]:.2f} 到 ${snr_data["strong_support"]:.2f}
+                - 主要供應區: ${snr_results["strong_resistance"]:.2f} 到 ${snr_results["near_resistance"]:.2f}
+                - 主要需求區: ${snr_results["near_support"]:.2f} 到 ${snr_results["strong_support"]:.2f}
                 """)
                 
             st.markdown('</div>', unsafe_allow_html=True)
@@ -2016,29 +2020,29 @@ with tabs[0]:
         st.markdown("<h3>綜合交易建議</h3>", unsafe_allow_html=True)
         
         # 檢查 SMC 和 SNR 建議是否一致
-        is_consistent = smc_data["recommendation"] == snr_data["recommendation"]
+        is_consistent = smc_results["recommendation"] == snr_results["recommendation"]
         confidence = 0.8 if is_consistent else 0.6
         
         # 決定最終建議
         if is_consistent:
-            final_rec = smc_data["recommendation"]
-        elif smc_data["trend_strength"] > 0.7:
-            final_rec = smc_data["recommendation"]
-        elif snr_data["rsi"] < 30 or snr_data["rsi"] > 70:
-            final_rec = snr_data["recommendation"]
+            final_rec = smc_results["recommendation"]
+        elif smc_results["trend_strength"] > 0.7:
+            final_rec = smc_results["recommendation"]
+        elif snr_results["rsi"] < 30 or snr_results["rsi"] > 70:
+            final_rec = snr_results["recommendation"]
         else:
             final_rec = "neutral"
         
         # 計算風險評分
         risk_score = 5
-        if smc_data["market_structure"] == "bullish":
+        if smc_results["market_structure"] == "bullish":
             risk_score -= 1
         else:
             risk_score += 1
             
-        if snr_data["overbought"]:
+        if snr_results["overbought"]:
             risk_score += 2
-        elif snr_data["oversold"]:
+        elif snr_results["oversold"]:
             risk_score -= 2
             
         if final_rec == "buy":
@@ -2065,8 +2069,8 @@ with tabs[0]:
         </div>
         
         <div class="analysis-summary">
-            <p><strong>市場結構:</strong> {selected_symbol} 目前處於{"上升" if smc_data["market_structure"] == "bullish" else "下降"}趨勢，趨勢強度為 {smc_data["trend_strength"]:.2f}。</p>
-            <p><strong>技術指標:</strong> RSI為 {snr_data["rsi"]:.2f}，{"顯示超買信號" if snr_data["overbought"] else "顯示超賣信號" if snr_data["oversold"] else "處於中性區間"}。</p>
+            <p><strong>市場結構:</strong> {selected_symbol} 目前處於{"上升" if smc_results["market_structure"] == "bullish" else "下降"}趨勢，趨勢強度為 {smc_results["trend_strength"]:.2f}。</p>
+            <p><strong>技術指標:</strong> RSI為 {snr_results["rsi"]:.2f}，{"顯示超買信號" if snr_results["overbought"] else "顯示超賣信號" if snr_results["oversold"] else "處於中性區間"}。</p>
             <p><strong>風險評分:</strong> {risk_score}/10 ({"高風險" if risk_score > 7 else "中等風險" if risk_score > 4 else "低風險"})</p>
         </div>
         """, unsafe_allow_html=True)
@@ -2075,7 +2079,7 @@ with tabs[0]:
         with st.expander("查看完整分析報告"):
             with st.spinner("正在生成完整分析報告..."):
                 # 使用真實API進行整合分析
-                claude_analysis = get_claude_analysis(selected_symbol, selected_timeframe, smc_data, snr_data)
+                claude_analysis = get_claude_analysis(selected_symbol, selected_timeframe, smc_results, snr_results)
                 st.markdown(claude_analysis)
                 
         st.markdown('</div>', unsafe_allow_html=True)
@@ -2095,7 +2099,7 @@ with tabs[1]:
             
             with st.spinner("正在使用 GPT-4o-mini 分析市場情緒..."):
                 # 使用真實API進行市場情緒分析
-                gpt4o_analysis = get_gpt4o_analysis(selected_symbol, selected_timeframe, smc_data, snr_data)
+                gpt4o_analysis = get_gpt4o_analysis(selected_symbol, selected_timeframe, smc_results, snr_results)
                 st.markdown(gpt4o_analysis)
                 
             st.markdown('</div>', unsafe_allow_html=True)
@@ -2111,12 +2115,12 @@ with tabs[1]:
                 strategy_prompt = f"""
                 請針對{selected_symbol}在{selected_timeframe}時間框架下，根據以下數據提供簡短的交易策略建議：
                 
-                價格: ${smc_data['price']:.2f}
-                市場結構: {"上升趨勢" if smc_data['market_structure'] == 'bullish' else "下降趨勢"}
-                趨勢強度: {smc_data['trend_strength']:.2f}
-                RSI: {snr_data['rsi']:.2f}
-                支撐位: ${snr_data['near_support']:.2f}
-                阻力位: ${snr_data['near_resistance']:.2f}
+                價格: ${smc_results['price']:.2f}
+                市場結構: {"上升趨勢" if smc_results['market_structure'] == 'bullish' else "下降趨勢"}
+                趨勢強度: {smc_results['trend_strength']:.2f}
+                RSI: {snr_results['rsi']:.2f}
+                支撐位: ${snr_results['near_support']:.2f}
+                阻力位: ${snr_results['near_resistance']:.2f}
                 
                 請提供3-4個具體的交易策略建議，並為每個策略添加評分（10分制，10分為最高分且最為建議）。
                 每個策略必須包含：
@@ -2170,18 +2174,18 @@ with tabs[1]:
                             if final_rec == "buy":
                                 strategy_analysis += f"""
                                 1. **突破追漲策略 [8分]**
-                                   - **進場點**: 價格突破${snr_data['near_resistance']:.2f}阻力位，且成交量放大
-                                   - **目標價**: ${smc_data['resistance_level']:.2f}（重要阻力位）
-                                   - **止損位**: ${(snr_data['near_resistance']*0.99):.2f}（阻力位下方約1%）
+                                   - **進場點**: 價格突破${snr_results['near_resistance']:.2f}阻力位，且成交量放大
+                                   - **目標價**: ${smc_results['resistance_level']:.2f}（重要阻力位）
+                                   - **止損位**: ${(snr_results['near_resistance']*0.99):.2f}（阻力位下方約1%）
                                 
                                 2. **支撐回調策略 [9分]**
-                                   - **進場點**: 價格回調至${snr_data['near_support']:.2f}支撐位附近，RSI同時回落至50以下
-                                   - **目標價**: ${snr_data['near_resistance']:.2f}（近期阻力位）
-                                   - **止損位**: ${(snr_data['near_support']*0.98):.2f}（支撐位下方約2%）
+                                   - **進場點**: 價格回調至${snr_results['near_support']:.2f}支撐位附近，RSI同時回落至50以下
+                                   - **目標價**: ${snr_results['near_resistance']:.2f}（近期阻力位）
+                                   - **止損位**: ${(snr_results['near_support']*0.98):.2f}（支撐位下方約2%）
                                 
                                 3. **高點獲利策略 [7分]**
                                    - **進場點**: 已持有倉位，目前處於盈利狀態
-                                   - **目標價**: 價格接近${smc_data['resistance_level']:.2f}時分批減倉
+                                   - **目標價**: 價格接近${smc_results['resistance_level']:.2f}時分批減倉
                                    - **止損位**: 保留部分倉位，移動止損至入場價格
                                 """
                             elif final_rec == "sell":
@@ -2228,9 +2232,9 @@ with tabs[1]:
                             
                             1. **風險回報比**: 計算方式為潛在獲利÷潛在風險。比例>3:1為優(+3分)，>2:1為良(+2分)，<1:1為差(+0分)
                             
-                            2. **趨勢明確度**: 當前趨勢強度為{smc_data["trend_strength"]:.2f}，{"趨勢明確" if smc_data["trend_strength"] > 0.6 else "趨勢不明確"}(+{max(1, int(smc_data["trend_strength"] * 10 * 0.3))}分)
+                            2. **趨勢明確度**: 當前趨勢強度為{smc_results["trend_strength"]:.2f}，{"趨勢明確" if smc_results["trend_strength"] > 0.6 else "趨勢不明確"}(+{max(1, int(smc_results["trend_strength"] * 10 * 0.3))}分)
                             
-                            3. **技術指標確認**: RSI={snr_data["rsi"]:.1f}，{"超買區間" if snr_data["rsi"] > 70 else "超賣區間" if snr_data["rsi"] < 30 else "中性區間"}，{"支持策略方向" if (final_rec == "buy" and snr_data["rsi"] < 50) or (final_rec == "sell" and snr_data["rsi"] > 50) else "不支持策略方向"}(+1-2分)
+                            3. **技術指標確認**: RSI={snr_results["rsi"]:.1f}，{"超買區間" if snr_results["rsi"] > 70 else "超賣區間" if snr_results["rsi"] < 30 else "中性區間"}，{"支持策略方向" if (final_rec == "buy" and snr_results["rsi"] < 50) or (final_rec == "sell" and snr_results["rsi"] > 50) else "不支持策略方向"}(+1-2分)
                             
                             4. **執行難度**: 考慮進場時機識別難度、止損設置合理性、目標價格可達性(+1-2分)
                             
