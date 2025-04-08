@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-加密貨幣分析工具 v3.6.0
-更新內容: 添加WhatsApp通知功能，優化Binance API連接和數據可靠性，改進用戶界面
+GentsClub XAI - 標準普爾500指數(SPX)分析工具 v1.0.0
+專注於SPX指數的AI驅動分析，使用多模型技術提供市場洞察
 數據獲取優先順序:
-1. Binance API (主要數據源)
-2. Crypto APIs (備用數據源)
-3. Smithery MCP API
-4. CoinCap API
+1. Yahoo Finance API (主要數據源)
+2. Alpha Vantage API (備用數據源)
+3. 內部SPX數據模型
 """
 
+# 設置強制使用SPX模式的環境變數
 import os
+os.environ['APP_TYPE'] = 'SPX_ANALYZER'
+os.environ['APP_NAME'] = 'GentsClub XAI'
+os.environ['APP_VERSION'] = 'v1.0.0'
+
+import sys
 from pathlib import Path
 
 # 檢測部署環境並自動創建空的secrets.toml檔案
