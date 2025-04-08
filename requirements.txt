@@ -8,5 +8,5 @@ openai==1.13.3
 python-dotenv>=0.21.0
 orjson>=3.8.7
 smithery>=0.1.0
-# smithery-mcp>=0.1.0 # 已設為可選依賴，安裝失敗時應用程序仍可運行
+# smithery-mcp>=0.1.0 # 已設為可選依賴，無法安裝時將使用模擬器模式
 apscheduler==3.10.1 
