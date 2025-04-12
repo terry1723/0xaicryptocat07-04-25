@@ -1954,6 +1954,13 @@ with tabs[0]:
                 # 進行真實技術分析
                 smc_results = smc_analysis(df)
                 snr_results = snr_analysis(df)
+                
+                # 將分析結果存入session_state以供其他部分使用
+                st.session_state['smc_results'] = smc_results
+                st.session_state['snr_results'] = snr_results
+                
+                # 設置analyzed為True，表示已進行分析
+                st.session_state['analyzed'] = True
             else:
                 st.error(f"無法獲取 {selected_symbol} 的數據，請稍後再試或選擇其他幣種。")
     else:
@@ -1964,6 +1971,10 @@ with tabs[0]:
     
     # 使用可折疊區域顯示更多指標和詳細信息
     if st.session_state.get('analyzed', False):
+        # 從session_state中獲取分析結果
+        smc_results = st.session_state.get('smc_results')
+        snr_results = st.session_state.get('snr_results')
+        
         # 使用兩列布局顯示關鍵指標
         col1, col2 = st.columns(2)
         
@@ -1972,7 +1983,6 @@ with tabs[0]:
             st.markdown('<div class="stCardContainer">', unsafe_allow_html=True)
             st.markdown("<h3>SMC 市場結構分析</h3>", unsafe_allow_html=True)
             
-            # 使用真實SMC分析數據
             # 顯示主要信息
             st.markdown(f"""
             <div class="highlight-metric">市場結構: {"看漲" if smc_results["market_structure"] == "bullish" else "看跌"}</div>
@@ -2005,7 +2015,6 @@ with tabs[0]:
             st.markdown('<div class="stCardContainer">', unsafe_allow_html=True)
             st.markdown("<h3>SNR 供需分析</h3>", unsafe_allow_html=True)
             
-            # 使用真實SNR分析數據
             # 顯示主要信息
             rsi_state = "超買" if snr_results["overbought"] else "超賣" if snr_results["oversold"] else "中性"
             st.markdown(f"""
@@ -2107,6 +2116,10 @@ with tabs[1]:
     st.markdown("<h2>AI 驅動分析</h2>", unsafe_allow_html=True)
     
     if st.session_state.get('analyzed', False):
+        # 從session_state中獲取分析結果
+        smc_results = st.session_state.get('smc_results')
+        snr_results = st.session_state.get('snr_results')
+        
         # AI 分析分為兩列
         col1, col2 = st.columns(2)
         
