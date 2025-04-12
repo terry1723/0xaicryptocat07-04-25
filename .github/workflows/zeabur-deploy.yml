@@ -1,0 +1,21 @@
+name: Deploy to Zeabur
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Trigger deploy webhook
+        run: |
+          echo "Triggering Zeabur deploy..."
+          echo "TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_ENV
+          echo "FORCE_REBUILD value: true"
+          echo "TIMESTAMP value: $TIMESTAMP"
+          # 如果您有Zeabur Webhook URL，可以在下方取消註釋並添加URL
+          # curl -X POST https://api.zeabur.com/projects/{YOUR_PROJECT_ID}/deploy 
