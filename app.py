@@ -3229,22 +3229,20 @@ atexit.register(on_shutdown)
 auto_restart_auto_alerts()
 
 # 獲取SPX(標準普爾500指數)數據的函數
-def get_spx_data(timeframe, limit=100):
+def get_spx_data(timeframe='1d', limit=100):
     """
-    從Yahoo Finance API獲取標準普爾500指數(SPX)的OHLCV數據
+    使用yfinance獲取標準普爾500指數數據
     
     參數:
-    timeframe (str): 時間框架，如 '1d', '4h', '1h'
-    limit (int): 要獲取的數據點數量
+    timeframe (str): 時間框架，如'1h', '4h', '1d'等
+    limit (int): 獲取的數據點數量
     
     返回:
-    pandas.DataFrame: 包含OHLCV數據的DataFrame，如果獲取失敗則返回None
+    DataFrame: 包含OHLCV數據的DataFrame
     """
     try:
-        print(f"正在獲取SPX數據，時間框架：{timeframe}，數據點數：{limit}...")
-        
-        # 將時間框架轉換為Yahoo Finance格式
-        yf_timeframe = {
+        # 將streamlit時間框架轉換為yfinance時間框架
+        tf_mapping = {
             '1m': '1m',
             '5m': '5m',
             '15m': '15m',
@@ -3253,230 +3251,61 @@ def get_spx_data(timeframe, limit=100):
             '4h': '4h',
             '1d': '1d',
             '1w': '1wk',
-            '1mo': '1mo'
-        }.get(timeframe, '1d')
+            '1M': '1mo'
+        }
         
-        # 計算開始日期
+        # 獲取適當的間隔和時間段
+        interval = tf_mapping.get(timeframe, '1d')
+        
+        # 計算開始和結束日期
         end_date = datetime.now()
         
-        # 根據時間框架確定獲取數據的時間範圍
+        # 根據時間框架和限制確定起始日期
         if timeframe in ['1m', '5m', '15m', '30m']:
-            # 分鐘級數據，Yahoo只提供7天
-            days_to_fetch = 7
-        elif timeframe in ['1h', '4h']:
-            # 小時級數據，Yahoo提供60天
-            days_to_fetch = 60
+            # 分鐘級數據通常只有最近7天可用
+            days_back = min(7, limit // 24 + 1)
+            start_date = end_date - timedelta(days=days_back)
+        elif timeframe == '1h':
+            # 小時級數據可以獲取60天
+            days_back = min(60, limit // 24 + 1)
+            start_date = end_date - timedelta(days=days_back)
         else:
-            # 天級或更高時間框架，可獲取更長歷史
-            days_to_fetch = limit + 10  # 多獲取一些，以防節假日等因素
+            # 日級及以上的數據可以獲取多年
+            days_back = limit * 2  # 保守估計，確保獲取足夠的數據點
+            start_date = end_date - timedelta(days=days_back)
         
-        start_date = end_date - timedelta(days=days_to_fetch)
+        # 使用yfinance獲取SPX數據
+        spx_data = yf.download(
+            tickers='^GSPC',  # SPX的代碼
+            start=start_date.strftime('%Y-%m-%d'),
+            end=end_date.strftime('%Y-%m-%d'),
+            interval=interval,
+            auto_adjust=True
+        )
         
-        # 構建Yahoo Finance API的請求URL
-        symbol = '^GSPC'  # S&P 500指數的Yahoo Finance代碼
-        interval = yf_timeframe
+        # 重設索引以便處理
+        spx_data = spx_data.reset_index()
         
-        # 格式化日期
-        start_str = start_date.strftime('%Y-%m-%d')
-        end_str = end_date.strftime('%Y-%m-%d')
-        
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-        params = {
-            'period1': int(start_date.timestamp()),
-            'period2': int(end_date.timestamp()),
-            'interval': interval,
-            'includePrePost': 'false',
-            'events': 'div,split'
-        }
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        
-        # 發送請求
-        response = requests.get(url, params=params, headers=headers)
-        
-        if response.status_code != 200:
-            print(f"Yahoo Finance API請求失敗，狀態碼：{response.status_code}")
-            raise Exception(f"Yahoo Finance API請求失敗：{response.status_code}")
-        
-        # 解析數據
-        data = response.json()
-        
-        # 檢查是否成功獲取數據
-        if 'chart' not in data or 'result' not in data['chart'] or not data['chart']['result']:
-            print("Yahoo Finance API返回的數據格式不正確")
-            raise Exception("Yahoo Finance API返回的數據格式不正確")
-        
-        # 提取時間戳和價格數據
-        result = data['chart']['result'][0]
-        timestamps = result['timestamp']
-        quote = result['indicators']['quote'][0]
-        
-        # 確保所有必要的數據都存在
-        if not all(key in quote for key in ['open', 'high', 'low', 'close', 'volume']):
-            missing_keys = [key for key in ['open', 'high', 'low', 'close', 'volume'] if key not in quote]
-            print(f"Yahoo Finance API返回的數據缺少以下字段：{missing_keys}")
-            raise Exception(f"Yahoo Finance API返回的數據缺少以下字段：{missing_keys}")
-        
-        # 創建DataFrame
-        df_data = []
-        for i in range(len(timestamps)):
-            timestamp = timestamps[i]
-            
-            # 檢查該時間點是否有完整數據
-            if any(pd.isna(quote[key][i]) for key in ['open', 'high', 'low', 'close']):
-                continue
-            
-            open_price = quote['open'][i]
-            high_price = quote['high'][i]
-            low_price = quote['low'][i]
-            close_price = quote['close'][i]
-            volume = quote['volume'][i]
-            
-            df_data.append([
-                timestamp,
-                open_price,
-                high_price,
-                low_price,
-                close_price,
-                volume
-            ])
-        
-        # 創建DataFrame
-        df = pd.DataFrame(df_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        
-        # 將timestamp轉換為datetime格式
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-        
-        # 如果需要，重新採樣數據以匹配請求的時間框架
-        # 例如，從1小時數據創建4小時數據
-        if timeframe == '4h' and yf_timeframe == '1h':
-            df.set_index('timestamp', inplace=True)
-            df = df.resample('4H').agg({
-                'open': 'first',
-                'high': 'max',
-                'low': 'min',
-                'close': 'last',
-                'volume': 'sum'
-            }).dropna()
-            df.reset_index(inplace=True)
-        
-        # 取最近的limit個數據點
-        if len(df) > limit:
-            df = df.tail(limit)
-        
-        print(f"成功獲取SPX數據，共{len(df)}個數據點")
-        return df
-        
-    except Exception as e:
-        print(f"獲取SPX數據失敗：{str(e)}")
-        print("使用備用方法或生成模擬數據...")
-        
-        # 如果API調用失敗，使用模擬數據作為備用
-        try:
-            # 嘗試使用Alpha Vantage API作為備用
-            api_key = "UUWFBIUWNRJ3N4ZP"  # Alpha Vantage免費API密鑰
-            
-            # 將時間框架轉換為Alpha Vantage格式
-            av_timeframe = {
-                '1m': '1min',
-                '5m': '5min',
-                '15m': '15min',
-                '30m': '30min',
-                '1h': '60min',
-                '4h': 'daily',  # Alpha Vantage沒有4小時，使用日線代替
-                '1d': 'daily',
-                '1w': 'weekly',
-                '1mo': 'monthly'
-            }.get(timeframe, 'daily')
-            
-            function = 'TIME_SERIES_INTRADAY' if av_timeframe in ['1min', '5min', '15min', '30min', '60min'] else f'TIME_SERIES_{av_timeframe.upper()}'
-            
-            # 構建API URL
-            if function == 'TIME_SERIES_INTRADAY':
-                url = f"https://www.alphavantage.co/query?function={function}&symbol=SPY&interval={av_timeframe}&outputsize=full&apikey={api_key}"
-            else:
-                url = f"https://www.alphavantage.co/query?function={function}&symbol=SPY&outputsize=full&apikey={api_key}"
-            
-            response = requests.get(url)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # 提取時間序列數據
-                time_series_key = next((k for k in data.keys() if 'Time Series' in k), None)
-                
-                if time_series_key and data[time_series_key]:
-                    time_series = data[time_series_key]
-                    
-                    # 將數據轉換為DataFrame
-                    df_data = []
-                    for date_str, values in time_series.items():
-                        timestamp = pd.to_datetime(date_str)
-                        open_price = float(values.get('1. open', 0))
-                        high_price = float(values.get('2. high', 0))
-                        low_price = float(values.get('3. low', 0))
-                        close_price = float(values.get('4. close', 0))
-                        volume = float(values.get('5. volume', 0))
-                        
-                        df_data.append([
-                            timestamp,
-                            open_price,
-                            high_price,
-                            low_price,
-                            close_price,
-                            volume
-                        ])
-                    
-                    # 創建DataFrame並排序
-                    df = pd.DataFrame(df_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                    df.sort_values('timestamp', inplace=True)
-                    
-                    # 取最近的limit個數據點
-                    if len(df) > limit:
-                        df = df.tail(limit)
-                    
-                    print(f"成功從Alpha Vantage獲取SPX數據，共{len(df)}個數據點")
-                    return df
-        
-        except Exception as av_error:
-            print(f"Alpha Vantage API請求失敗：{str(av_error)}")
-        
-        # 如果所有API請求都失敗，生成模擬數據
-        print("所有API請求失敗，生成SPX模擬數據...")
-        
-        # 生成模擬的SPX數據，盡量接近實際價格範圍
-        dates = pd.date_range(end=pd.Timestamp.now(), periods=limit, freq=timeframe)
-        
-        # 2025年4月的SPX基準價格範圍
-        base_price = 5400 + random.uniform(-100, 100)  # 接近2025年4月的可能範圍
-        volatility = 0.01  # SPX通常波動性較低
-        
-        # 生成模擬的價格數據
-        close_prices = []
-        price = base_price
-        
-        for i in range(limit):
-            # 添加一些隨機波動
-            change = price * volatility * random.uniform(-1, 1)
-            # 添加一些趨勢
-            trend = price * 0.0005 * (i - limit/2)
-            price = price + change + trend
-            close_prices.append(max(0.01, price))  # 確保價格為正
-        
-        # 從收盤價生成其他價格數據
-        df = pd.DataFrame({
-            'timestamp': dates,
-            'close': close_prices,
-            'open': [p * (1 + random.uniform(-0.005, 0.005)) for p in close_prices],
-            'high': [p * (1 + random.uniform(0, 0.01)) for p in close_prices],
-            'low': [p * (1 - random.uniform(0, 0.01)) for p in close_prices],
-            'volume': [random.uniform(200000000, 800000000) for _ in close_prices]  # SPX的典型成交量
+        # 重命名列以符合ccxt標準格式
+        spx_data = spx_data.rename(columns={
+            'Date': 'timestamp',
+            'Datetime': 'timestamp',
+            'Open': 'open',
+            'High': 'high',
+            'Low': 'low',
+            'Close': 'close',
+            'Volume': 'volume'
         })
         
-        print(f"使用模擬數據：SPX 基準價格=${base_price:.2f}")
-        return df
+        # 限制返回的數據點數量
+        if len(spx_data) > limit:
+            spx_data = spx_data.tail(limit)
+        
+        return spx_data
+        
+    except Exception as e:
+        print(f"獲取SPX數據時出錯: {str(e)}")
+        return None
 
 # 主應用函數 - SPX分析工具
 def main_app():
